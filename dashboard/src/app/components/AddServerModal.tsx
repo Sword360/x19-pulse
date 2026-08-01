@@ -8,7 +8,7 @@ export function AddServerModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
   const serverUrl = typeof window !== "undefined" ? window.location.origin : "https://x19-pulse.vercel.app";
   const agentToken = "pulse_agent_token_" + Math.random().toString(36).substring(2, 9);
 
-  const githubInstallCommand = `curl -sSL https://raw.githubusercontent.com/Sword360/x19-pulse/main/agent/install.sh | bash -s -- ${serverUrl} ${agentToken}`;
+  const githubInstallCommand = `curl -fsSL https://raw.githubusercontent.com/Sword360/x19-pulse/main/agent/install.sh -o install.sh && bash install.sh ${serverUrl} ${agentToken}`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
