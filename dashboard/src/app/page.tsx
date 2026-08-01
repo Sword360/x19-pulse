@@ -46,8 +46,9 @@ export default function Dashboard() {
   const [terminalInput, setTerminalInput] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("$ PulseOps Web Shell Initialized.\n$ Type commands below (e.g. ps, uptime, ls, whoami)\n");
 
-  // Process Search State
+  // Process Search & Server Search State
   const [processSearch, setProcessSearch] = useState("");
+  const [serverSearch, setServerSearch] = useState("");
 
   useEffect(() => {
     const storedUser = localStorage.getItem("pulseops_user");
@@ -189,6 +190,10 @@ export default function Dashboard() {
     p.pid.includes(processSearch)
   );
 
+  const filteredServers = servers.filter((s) =>
+    s.hostname.toLowerCase().includes(serverSearch.toLowerCase())
+  );
+
   if (!currentUser) return null;
 
   return (
@@ -271,20 +276,36 @@ export default function Dashboard() {
       {/* Main Grid */}
       <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left Column: Server Nodes List */}
-        <div className="lg:col-span-1 space-y-4">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-2">
-            <Server className="w-4 h-4 text-indigo-400" />
-            <span>Active Server Nodes ({servers.length})</span>
-          </h2>
+        <div className="lg:col-span-1 space-y-3">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-2">
+              <Server className="w-4 h-4 text-indigo-400" />
+              <span>Nodes ({filteredServers.length})</span>
+            </h2>
+          </div>
+
+          {/* Hostname Search Input */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={serverSearch}
+              onChange={(e) => setServerSearch(e.target.value)}
+              placeholder="Search hostname..."
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition"
+            />
+          </div>
 
           <div className="space-y-2">
-            {servers.length === 0 ? (
+            {filteredServers.length === 0 ? (
               <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 text-center">
-                <p className="text-xs text-slate-500">No active agents reporting.</p>
-                <p className="text-[10px] text-slate-600 mt-1">Run pulseops-agent daemon on Linux hosts.</p>
+                <p className="text-xs text-slate-500">
+                  {serverSearch ? `No hostname matching "${serverSearch}"` : "No active agents reporting."}
+                </p>
+                {!serverSearch && <p className="text-[10px] text-slate-600 mt-1">Run pulseops-agent daemon on Linux hosts.</p>}
               </div>
             ) : (
-              servers.map((s) => (
+              filteredServers.map((s) => (
                 <div
                   key={s.hostname}
                   onClick={() => setSelectedServer(s.hostname)}
