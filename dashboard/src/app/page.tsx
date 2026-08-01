@@ -10,9 +10,11 @@ export default function Dashboard() {
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
   const fetchServers = async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/servers");
+      const res = await fetch(`${API_URL}/api/servers`);
       if (res.ok) {
         const data = await res.json();
         setServers(data);
@@ -29,7 +31,7 @@ export default function Dashboard() {
 
   const fetchHistory = async (hostname: string) => {
     try {
-      const res = await fetch(`http://localhost:3001/api/servers/${hostname}/history`);
+      const res = await fetch(`${API_URL}/api/servers/${hostname}/history`);
       if (res.ok) {
         const data = await res.json();
         setHistory(data);
