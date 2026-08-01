@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import { getPrisma } from '@/lib/db';
 
-// Global database store for user accounts
 declare global {
   var _dbUsers: any[] | undefined;
 }
@@ -29,8 +29,26 @@ if (!globalThis._dbUsers) {
 
 const dbUsers = globalThis._dbUsers;
 
-// GET: Fetch all user accounts
+// GET: Fetch all users from Supabase / Memory
 export async function GET() {
+  const prisma = getPrisma();
+  try {
+    if (prisma) {
+      const dbUsersFromSupabase = await prisma.user.findMany({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          createdAt: true
+        }
+      });
+      return NextResponse.json(dbUsersFromSupabase);
+    }
+  } catch (e) {
+    console.error("Supabase query fallback:", e);
+  }
+
   const safeUsers = dbUsers.map(({ passwordHash, ...u }) => u);
   return NextResponse.json(safeUsers);
 }
@@ -49,13 +67,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Name, Email, and Password are required' }, { status: 400 });
     }
 
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        const newUser = await prisma.user.create({
+          data: {
+            name,
+            email,
+            passwordHash,
+            role: role === 'ADMIN' ? 'ADMIN' : 'VIEWER'
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true
+          }
+        });
+        return NextResponse.json({ status: 'success', user: newUser });
+      } catch (err: any) {
+        if (err.code === 'P2002') {
+          return NextResponse.json({ error: 'User with this email already exists in Supabase' }, { status: 400 });
+        }
+      }
+    }
+
+    // In-memory fallback
     const existing = dbUsers.find(u => u.email === email);
     if (existing) {
       return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
     }
-
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
 
     const newUser = {
       id: Date.now().toString(),
@@ -87,6 +132,14 @@ export async function DELETE(request: Request) {
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    }
+
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        await prisma.user.delete({ where: { id } });
+        return NextResponse.json({ status: 'success', message: 'User removed from Supabase Database' });
+      } catch (err) {}
     }
 
     const index = dbUsers.findIndex(u => u.id === id);

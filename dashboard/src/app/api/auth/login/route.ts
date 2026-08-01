@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import { getPrisma } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
@@ -12,8 +13,23 @@ export async function POST(request: Request) {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
-    const dbUsers = globalThis._dbUsers || [];
-    const user = dbUsers.find(u => u.email.toLowerCase() === cleanEmail);
+    let user: any = null;
+
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        user = await prisma.user.findUnique({
+          where: { email: cleanEmail }
+        });
+      } catch (err) {
+        console.error("Supabase auth query fallback:", err);
+      }
+    }
+
+    if (!user) {
+      const dbUsers = globalThis._dbUsers || [];
+      user = dbUsers.find(u => u.email.toLowerCase() === cleanEmail);
+    }
 
     if (!user) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });

@@ -1,0 +1,101 @@
+// Prisma Schema for PulseOps Infrastructure Monitoring Platform on Supabase
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum ServerStatus {
+  ONLINE
+  OFFLINE
+  WARNING
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model User {
+  id            String     @id @default(uuid())
+  email         String     @unique
+  name          String?
+  passwordHash  String
+  role          Role       @default(VIEWER)
+  twoFactorAuth Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  auditLogs     AuditLog[]
+}
+
+model Server {
+  id           String        @id @default(uuid())
+  hostname     String        @unique
+  ipAddress    String        @default("127.0.0.1")
+  os           String        @default("Linux")
+  kernel       String        @default("5.15.0")
+  cpuModel     String        @default("x86_64")
+  cpuCores     Int           @default(4)
+  totalMemory  BigInt        @default(8589934592)
+  totalDisk    BigInt        @default(107374182400)
+  status       ServerStatus  @default(ONLINE)
+  agentVersion String        @default("1.0.0")
+  lastSeen     DateTime      @default(now())
+  agentToken   String        @default("default-agent-token")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  metrics      ServerMetric[]
+  alerts       Alert[]
+  auditLogs    AuditLog[]
+}
+
+model ServerMetric {
+  id          String   @id @default(uuid())
+  serverId    String
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  cpuUsage    Float
+  ramUsage    Float
+  diskUsage   Float
+  netRx       BigInt   @default(0)
+  netTx       BigInt   @default(0)
+  loadAvg1    Float    @default(0)
+  loadAvg5    Float    @default(0)
+  loadAvg15   Float    @default(0)
+  timestamp   DateTime @default(now())
+
+  @@index([serverId, timestamp])
+}
+
+model Alert {
+  id         String        @id @default(uuid())
+  serverId   String
+  server     Server        @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  type       String
+  message    String
+  severity   AlertSeverity @default(WARNING)
+  resolved   Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  resolvedAt DateTime?
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  serverId  String?
+  server    Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
+  action    String
+  details   String
+  ipAddress String   @default("127.0.0.1")
+  timestamp DateTime @default(now())
+}
