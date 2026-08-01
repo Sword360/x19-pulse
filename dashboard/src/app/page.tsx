@@ -109,7 +109,7 @@ export default function Dashboard() {
   useEffect(() => {
     const storedUser = localStorage.getItem("pulseops_user");
     if (!storedUser) {
-      const defaultUser = { name: "System Admin", role: "ADMIN" };
+      const defaultUser = { name: "System Admin", email: "admin@pulseops.com", role: "ADMIN" as const };
       localStorage.setItem("pulseops_user", JSON.stringify(defaultUser));
       setCurrentUser(defaultUser);
       return;
@@ -117,7 +117,7 @@ export default function Dashboard() {
     try {
       setCurrentUser(JSON.parse(storedUser));
     } catch {
-      const defaultUser = { name: "System Admin", role: "ADMIN" };
+      const defaultUser = { name: "System Admin", email: "admin@pulseops.com", role: "ADMIN" as const };
       localStorage.setItem("pulseops_user", JSON.stringify(defaultUser));
       setCurrentUser(defaultUser);
     }
