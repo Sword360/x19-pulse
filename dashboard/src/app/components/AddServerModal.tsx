@@ -1,12 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { X, Server, Copy, Check, Terminal, ShieldCheck, Zap } from "lucide-react";
 
 export function AddServerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const serverUrl = typeof window !== "undefined" ? window.location.origin : "https://x19-pulse.vercel.app";
-  const agentToken = "pulse_agent_token_" + Math.random().toString(36).substring(2, 9);
+  
+  // Stable agent token that only generates once when modal opens
+  const agentToken = useMemo(() => {
+    return "pulse_agent_token_" + Math.random().toString(36).substring(2, 9);
+  }, [isOpen]);
 
   const githubInstallCommand = `curl -fsSL https://raw.githubusercontent.com/Sword360/x19-pulse/main/agent/install.sh -o install.sh && bash install.sh ${serverUrl} ${agentToken}`;
 
