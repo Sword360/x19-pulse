@@ -150,7 +150,7 @@ def get_system_logs():
 
 def check_vnc_active():
     try:
-        output = subprocess.check_output(["pgrep", "-f", "websockify|x11vnc"], stderr=subprocess.DEVNULL)
+        output = subprocess.check_output(["pgrep", "-f", "websockify|Xvnc|vncserver|tightvncserver|x11vnc"], stderr=subprocess.DEVNULL)
         return len(output.strip()) > 0
     except Exception:
         return False
@@ -199,7 +199,7 @@ def send_metrics(config, payload):
                             subprocess.Popen(["/bin/bash", "/opt/pulseops/vnc-start.sh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     elif cmd == "stop_vnc":
                         subprocess.run(["systemctl", "stop", "pulseops-vnc"], check=False)
-                        subprocess.run(["pkill", "-9", "-f", "websockify|x11vnc"], check=False)
+                        subprocess.run(["pkill", "-9", "-f", "websockify|Xvnc|vncserver|tightvncserver|x11vnc"], check=False)
                 except Exception:
                     pass
             return resp.status == 200

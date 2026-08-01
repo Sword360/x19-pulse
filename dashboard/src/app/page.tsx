@@ -849,7 +849,7 @@ export default function Dashboard() {
                       <div>
                         <h4 className="text-sm font-bold text-slate-200">VNC Service Currently Stopped</h4>
                         <p className="text-xs text-slate-500 mt-1">
-                          The x11vnc / websockify background service is offline on server node{" "}
+                          The TigerVNC / websockify background service is offline on server node{" "}
                           <span className="text-indigo-400 font-mono">{activeServerData.hostname}</span>.
                         </p>
                       </div>
