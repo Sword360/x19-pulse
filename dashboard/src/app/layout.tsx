@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PulseOps | Enterprise Linux System Monitoring & Management",
+  title: "PulseOps",
   description: "Enterprise Realtime Linux System Telemetry, Process Control & Remote Management Console",
 };
 
