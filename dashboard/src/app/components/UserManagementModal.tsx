@@ -39,49 +39,82 @@ export function UserManagementModal({ isOpen, onClose }: { isOpen: boolean; onCl
   const [role, setRole] = useState<"ADMIN" | "VIEWER">("VIEWER");
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    const stored = localStorage.getItem("pulseops_user_list");
-    if (stored) {
-      try {
-        setUsers(JSON.parse(stored));
-      } catch {
-        setUsers(DEFAULT_USERS);
+  const fetchDbUsers = async () => {
+    try {
+      const res = await fetch("/api/db/users");
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data);
       }
-    } else {
-      setUsers(DEFAULT_USERS);
-      localStorage.setItem("pulseops_user_list", JSON.stringify(DEFAULT_USERS));
+    } catch (e) {
+      console.error("Error fetching db users:", e);
     }
-  }, []);
+  };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (isOpen) {
+      fetchDbUsers();
+    }
+  }, [isOpen]);
+
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password) return;
 
-    const newUser: UserAccount = {
-      id: Date.now().toString(),
-      name,
-      email,
-      password,
-      role,
-      createdAt: new Date().toISOString().split("T")[0]
-    };
+    try {
+      const storedUser = localStorage.getItem("pulseops_user");
+      const currentUser = storedUser ? JSON.parse(storedUser) : null;
 
-    const updated = [...users, newUser];
-    setUsers(updated);
-    localStorage.setItem("pulseops_user_list", JSON.stringify(updated));
+      const res = await fetch("/api/db/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          role,
+          requesterRole: currentUser?.role || "VIEWER"
+        })
+      });
 
-    setName("");
-    setEmail("");
-    setPassword("");
-    setRole("VIEWER");
-    setMessage(`User ${newUser.email} created successfully with role ${newUser.role}`);
-    setTimeout(() => setMessage(null), 3000);
+      if (res.ok) {
+        const data = await res.json();
+        setName("");
+        setEmail("");
+        setPassword("");
+        setRole("VIEWER");
+        setMessage(`User ${data.user.email} saved to Database with role ${data.user.role}`);
+        fetchDbUsers();
+        setTimeout(() => setMessage(null), 3000);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to create user");
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleDeleteUser = (id: string) => {
-    const updated = users.filter((u) => u.id !== id);
-    setUsers(updated);
-    localStorage.setItem("pulseops_user_list", JSON.stringify(updated));
+  const handleDeleteUser = async (id: string) => {
+    try {
+      const storedUser = localStorage.getItem("pulseops_user");
+      const currentUser = storedUser ? JSON.parse(storedUser) : null;
+
+      const res = await fetch(`/api/db/users?id=${id}&requesterRole=${currentUser?.role || "VIEWER"}`, {
+        method: "DELETE"
+      });
+
+      if (res.ok) {
+        setMessage(`User account removed from Database`);
+        fetchDbUsers();
+        setTimeout(() => setMessage(null), 3000);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Permission denied: Only Admin users can modify database records");
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   if (!isOpen) return null;

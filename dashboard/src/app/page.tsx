@@ -24,7 +24,8 @@ import {
   Play,
   XCircle,
   Send,
-  Search
+  Search,
+  Trash2
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { UserManagementModal } from "./components/UserManagementModal";
@@ -133,6 +134,29 @@ export default function Dashboard() {
       "[NOTICE] Network interface eth0 link UP 1000 Mbps",
       "[INFO] Cron daemon job completed successfully"
     ]
+  };
+
+  const handleRemoveServer = async (hostname: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (currentUser?.role !== "ADMIN") return;
+    if (!confirm(`Are you sure you want to remove server "${hostname}" from the database?`)) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/db/servers?hostname=${hostname}&requesterRole=${currentUser.role}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        setActionMessage(`[DATABASE UPDATE]: Server node ${hostname} removed from database`);
+        setSelectedServer(null);
+        fetchServers();
+        setTimeout(() => setActionMessage(null), 4000);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Permission denied: Only Admin users can remove server nodes");
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleProcessAction = async (pid: string, action: "kill" | "restart") => {
@@ -323,9 +347,20 @@ export default function Dashboard() {
                         {s.hostname}
                       </span>
                     </div>
-                    <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                      {s.status}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                        {s.status}
+                      </span>
+                      {currentUser.role === "ADMIN" && (
+                        <button
+                          onClick={(e) => handleRemoveServer(s.hostname, e)}
+                          className="text-slate-500 hover:text-rose-400 p-1 transition rounded hover:bg-rose-500/10"
+                          title="Remove Server Node from Database"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
                     <div className="bg-slate-950/40 p-1.5 rounded-xl border border-slate-800/60">
