@@ -128,13 +128,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* User Session & Role Indicator */}
+        {/* Active Session Profile Indicator */}
         <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
+          <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5" title="Active Logged-in User Session">
             <UserCheck className="w-4 h-4 text-indigo-400" />
             <div className="text-xs">
+              <span className="text-[10px] text-slate-500 block uppercase tracking-wider font-semibold">Active User</span>
               <span className="font-semibold text-slate-200 block">{currentUser.name}</span>
-              <span className="text-[10px] text-slate-400">{currentUser.email}</span>
             </div>
             <span
               className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${

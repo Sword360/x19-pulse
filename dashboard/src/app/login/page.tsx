@@ -25,7 +25,9 @@ export default function LoginPage() {
         } catch {}
       }
 
-      const foundUser = userList.find((u: any) => u.email === email);
+      const foundUser = userList.find(
+        (u: any) => u.email === email && (u.password === password || (!u.password && password === "admin123"))
+      );
 
       if (email === "admin@pulseops.io" && password === "admin123") {
         localStorage.setItem(
@@ -46,7 +48,7 @@ export default function LoginPage() {
         );
         router.push("/");
       } else {
-        setError("Invalid credentials. Select a role below or use created user.");
+        setError("Invalid email or password.");
         setLoading(false);
       }
     }, 500);

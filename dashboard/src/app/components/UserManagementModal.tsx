@@ -7,6 +7,7 @@ export interface UserAccount {
   id: string;
   name: string;
   email: string;
+  password?: string;
   role: "ADMIN" | "VIEWER";
   createdAt: string;
 }
@@ -16,6 +17,7 @@ const DEFAULT_USERS: UserAccount[] = [
     id: "1",
     name: "System Administrator",
     email: "admin@pulseops.io",
+    password: "admin123",
     role: "ADMIN",
     createdAt: "2026-08-01"
   },
@@ -23,6 +25,7 @@ const DEFAULT_USERS: UserAccount[] = [
     id: "2",
     name: "Monitor User",
     email: "user@pulseops.io",
+    password: "user123",
     role: "VIEWER",
     createdAt: "2026-08-01"
   }
@@ -58,6 +61,7 @@ export function UserManagementModal({ isOpen, onClose }: { isOpen: boolean; onCl
       id: Date.now().toString(),
       name,
       email,
+      password,
       role,
       createdAt: new Date().toISOString().split("T")[0]
     };
@@ -70,7 +74,7 @@ export function UserManagementModal({ isOpen, onClose }: { isOpen: boolean; onCl
     setEmail("");
     setPassword("");
     setRole("VIEWER");
-    setMessage(`User ${newUser.email} created successfully as ${newUser.role}`);
+    setMessage(`User ${newUser.email} created successfully with role ${newUser.role}`);
     setTimeout(() => setMessage(null), 3000);
   };
 
