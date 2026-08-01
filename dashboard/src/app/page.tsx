@@ -16,9 +16,11 @@ import {
   Lock,
   RotateCw,
   Power,
-  Sliders
+  Sliders,
+  UserPlus
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { UserManagementModal } from "./components/UserManagementModal";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -28,6 +30,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("pulseops_user");
@@ -143,6 +146,16 @@ export default function Dashboard() {
               {currentUser.role}
             </span>
           </div>
+
+          {currentUser.role === "ADMIN" && (
+            <button
+              onClick={() => setIsUserModalOpen(true)}
+              className="flex items-center space-x-1.5 text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 px-3 py-1.5 rounded-xl border border-indigo-500/30 transition font-medium"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Manage Users</span>
+            </button>
+          )}
 
           <button
             onClick={fetchServers}
@@ -352,6 +365,8 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      <UserManagementModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} />
     </div>
   );
 }

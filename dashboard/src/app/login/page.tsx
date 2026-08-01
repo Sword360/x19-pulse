@@ -17,6 +17,16 @@ export default function LoginPage() {
     setLoading(true);
 
     setTimeout(() => {
+      const storedUsers = localStorage.getItem("pulseops_user_list");
+      let userList = [];
+      if (storedUsers) {
+        try {
+          userList = JSON.parse(storedUsers);
+        } catch {}
+      }
+
+      const foundUser = userList.find((u: any) => u.email === email);
+
       if (email === "admin@pulseops.io" && password === "admin123") {
         localStorage.setItem(
           "pulseops_user",
@@ -29,8 +39,14 @@ export default function LoginPage() {
           JSON.stringify({ name: "Monitor User", email, role: "VIEWER" })
         );
         router.push("/");
+      } else if (foundUser) {
+        localStorage.setItem(
+          "pulseops_user",
+          JSON.stringify({ name: foundUser.name, email: foundUser.email, role: foundUser.role })
+        );
+        router.push("/");
       } else {
-        setError("Invalid credentials. Please click a preset role below.");
+        setError("Invalid credentials. Select a role below or use created user.");
         setLoading(false);
       }
     }, 500);
