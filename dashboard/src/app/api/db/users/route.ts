@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 
 // Global database store for user accounts
 declare global {
@@ -11,7 +12,7 @@ if (!globalThis._dbUsers) {
       id: "1",
       name: "System Administrator",
       email: "admin@pulseops.io",
-      password: "admin123",
+      passwordHash: bcrypt.hashSync("admin123", 10),
       role: "ADMIN",
       createdAt: "2026-08-01"
     },
@@ -19,7 +20,7 @@ if (!globalThis._dbUsers) {
       id: "2",
       name: "Monitor User",
       email: "user@pulseops.io",
-      password: "user123",
+      passwordHash: bcrypt.hashSync("user123", 10),
       role: "VIEWER",
       createdAt: "2026-08-01"
     }
@@ -30,7 +31,7 @@ const dbUsers = globalThis._dbUsers;
 
 // GET: Fetch all user accounts
 export async function GET() {
-  const safeUsers = dbUsers.map(({ password, ...u }) => u);
+  const safeUsers = dbUsers.map(({ passwordHash, ...u }) => u);
   return NextResponse.json(safeUsers);
 }
 
@@ -53,17 +54,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
     }
 
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
     const newUser = {
       id: Date.now().toString(),
       name,
       email,
-      password,
+      passwordHash,
       role: role || 'VIEWER',
       createdAt: new Date().toISOString().split('T')[0]
     };
 
     dbUsers.push(newUser);
-    return NextResponse.json({ status: 'success', user: newUser });
+    const { passwordHash: _, ...safeUser } = newUser;
+    return NextResponse.json({ status: 'success', user: safeUser });
   } catch (e) {
     return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
   }

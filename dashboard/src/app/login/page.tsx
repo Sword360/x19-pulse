@@ -16,48 +16,22 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPassword = password.trim();
-
     try {
-      // 1. Check Hardcoded Default Accounts
-      if (cleanEmail === "admin@pulseops.io" && cleanPassword === "admin123") {
-        localStorage.setItem(
-          "pulseops_user",
-          JSON.stringify({ name: "Administrator", email: cleanEmail, role: "ADMIN" })
-        );
-        router.push("/");
-        return;
-      }
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
 
-      if (cleanEmail === "user@pulseops.io" && cleanPassword === "user123") {
-        localStorage.setItem(
-          "pulseops_user",
-          JSON.stringify({ name: "Monitor User", email: cleanEmail, role: "VIEWER" })
-        );
-        router.push("/");
-        return;
-      }
-
-      // 2. Fetch User Accounts from Database API
-      const res = await fetch("/api/db/users");
       if (res.ok) {
-        const dbUserList = await res.json();
-        const dbUser = dbUserList.find(
-          (u: any) => u.email.toLowerCase() === cleanEmail
-        );
-
-        if (dbUser) {
-          localStorage.setItem(
-            "pulseops_user",
-            JSON.stringify({ name: dbUser.name, email: dbUser.email, role: dbUser.role })
-          );
-          router.push("/");
-          return;
-        }
+        const data = await res.json();
+        localStorage.setItem("pulseops_user", JSON.stringify(data.user));
+        router.push("/");
+        return;
+      } else {
+        const err = await res.json();
+        setError(err.error || "Invalid email or password.");
       }
-
-      setError("Invalid email or password.");
     } catch (err) {
       console.error(err);
       setError("Authentication service error. Please try again.");
