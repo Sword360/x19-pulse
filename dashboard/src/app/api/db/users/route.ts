@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import { supabase } from '@/lib/supabase';
 import { getPrisma } from '@/lib/db';
 
 declare global {
@@ -29,24 +30,33 @@ if (!globalThis._dbUsers) {
 
 const dbUsers = globalThis._dbUsers;
 
-// GET: Fetch all users from Supabase / Memory
+// GET: Fetch all users from Supabase REST API / Memory
 export async function GET() {
-  const prisma = getPrisma();
   try {
-    if (prisma) {
-      const dbUsersFromSupabase = await prisma.user.findMany({
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true
-        }
-      });
-      return NextResponse.json(dbUsersFromSupabase);
+    const { data: supaUsers, error } = await supabase.from('users').select('id, name, email, role, created_at');
+    if (!error && supaUsers && supaUsers.length > 0) {
+      return NextResponse.json(supaUsers.map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.created_at || "2026-08-01"
+      })));
     }
   } catch (e) {
-    console.error("Supabase query fallback:", e);
+    console.error("Supabase REST API fallback:", e);
+  }
+
+  const prisma = getPrisma();
+  if (prisma) {
+    try {
+      const dbUsersFromPrisma = await prisma.user.findMany({
+        select: { id: true, name: true, email: true, role: true, createdAt: true }
+      });
+      if (dbUsersFromPrisma.length > 0) {
+        return NextResponse.json(dbUsersFromPrisma);
+      }
+    } catch (e) {}
   }
 
   const safeUsers = dbUsers.map(({ passwordHash, ...u }) => u);
@@ -70,30 +80,22 @@ export async function POST(request: Request) {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const prisma = getPrisma();
-    if (prisma) {
-      try {
-        const newUser = await prisma.user.create({
-          data: {
-            name,
-            email,
-            passwordHash,
-            role: role === 'ADMIN' ? 'ADMIN' : 'VIEWER'
-          },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            createdAt: true
-          }
-        });
-        return NextResponse.json({ status: 'success', user: newUser });
-      } catch (err: any) {
-        if (err.code === 'P2002') {
-          return NextResponse.json({ error: 'User with this email already exists in Supabase' }, { status: 400 });
+    // Save to Supabase Cloud Database via REST API
+    try {
+      const { data, error } = await supabase.from('users').insert([
+        {
+          name,
+          email: email.toLowerCase(),
+          password_hash: passwordHash,
+          role: role === 'ADMIN' ? 'ADMIN' : 'VIEWER'
         }
+      ]).select('id, name, email, role, created_at').single();
+
+      if (!error && data) {
+        return NextResponse.json({ status: 'success', user: data });
       }
+    } catch (e) {
+      console.error("Supabase insert error:", e);
     }
 
     // In-memory fallback
@@ -134,13 +136,12 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    const prisma = getPrisma();
-    if (prisma) {
-      try {
-        await prisma.user.delete({ where: { id } });
+    try {
+      const { error } = await supabase.from('users').delete().eq('id', id);
+      if (!error) {
         return NextResponse.json({ status: 'success', message: 'User removed from Supabase Database' });
-      } catch (err) {}
-    }
+      }
+    } catch (e) {}
 
     const index = dbUsers.findIndex(u => u.id === id);
     if (index !== -1) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import { supabase } from '@/lib/supabase';
 import { getPrisma } from '@/lib/db';
 
 export async function POST(request: Request) {
@@ -15,17 +16,32 @@ export async function POST(request: Request) {
 
     let user: any = null;
 
-    const prisma = getPrisma();
-    if (prisma) {
-      try {
-        user = await prisma.user.findUnique({
-          where: { email: cleanEmail }
-        });
-      } catch (err) {
-        console.error("Supabase auth query fallback:", err);
+    // 1. Try Supabase REST API Query
+    try {
+      const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).single();
+      if (!error && data) {
+        user = {
+          name: data.name,
+          email: data.email,
+          passwordHash: data.password_hash || data.passwordHash,
+          role: data.role
+        };
+      }
+    } catch (e) {
+      console.error("Supabase REST API login query:", e);
+    }
+
+    // 2. Try Prisma Query
+    if (!user) {
+      const prisma = getPrisma();
+      if (prisma) {
+        try {
+          user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+        } catch (e) {}
       }
     }
 
+    // 3. Fallback to default in-memory store
     if (!user) {
       const dbUsers = globalThis._dbUsers || [];
       user = dbUsers.find(u => u.email.toLowerCase() === cleanEmail);
