@@ -76,9 +76,8 @@ export default function Dashboard() {
       if (res.ok) {
         const data = await res.json();
         setServers(data);
-        if (data.length > 0 && !selectedServer) {
-          setSelectedServer(data[0].hostname);
-        }
+        // Only set default server if no server has been selected yet
+        setSelectedServer((prev) => prev || (data.length > 0 ? data[0].hostname : null));
       }
     } catch (e) {
       console.error("Error fetching servers:", e);
@@ -309,15 +308,22 @@ export default function Dashboard() {
                 <div
                   key={s.hostname}
                   onClick={() => setSelectedServer(s.hostname)}
-                  className={`cursor-pointer p-4 rounded-2xl border transition ${
+                  className={`cursor-pointer p-4 rounded-2xl border transition-all ${
                     selectedServer === s.hostname
-                      ? "bg-slate-800/80 border-indigo-500/50 shadow-lg shadow-indigo-500/5"
-                      : "bg-slate-900/40 border-slate-800 hover:bg-slate-800/40"
+                      ? "bg-slate-800/90 border-indigo-500 shadow-lg shadow-indigo-500/10 ring-1 ring-indigo-500/30"
+                      : "bg-slate-900/40 border-slate-800 hover:bg-slate-800/50 hover:border-slate-700"
                   }`}
                 >
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold text-sm text-slate-200">{s.hostname}</span>
-                    <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <div className="flex items-center space-x-2">
+                      {selectedServer === s.hostname && (
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                      )}
+                      <span className={`font-semibold text-sm ${selectedServer === s.hostname ? "text-indigo-300 font-bold" : "text-slate-200"}`}>
+                        {s.hostname}
+                      </span>
+                    </div>
+                    <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
                       {s.status}
                     </span>
                   </div>
