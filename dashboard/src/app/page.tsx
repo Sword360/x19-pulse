@@ -642,31 +642,57 @@ export default function Dashboard() {
           {/* TAB 5: noVNC REMOTE GUI */}
           {activeTab === "vnc" && (
             <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-wrap justify-between items-center gap-4">
                 <div>
                   <h3 className="text-base font-bold text-white">noVNC Remote Desktop Viewer (X11 GUI)</h3>
-                  <p className="text-xs text-slate-400">Interactive graphical remote desktop session</p>
+                  <p className="text-xs text-slate-400">Interactive graphical remote desktop session (Port 6080)</p>
                 </div>
-                <span className="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-0.5 rounded-full font-mono">
-                  X11 Display Stream
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-mono">
+                    x11vnc + websockify Active
+                  </span>
+                </div>
               </div>
 
-              <div className="bg-slate-950 border border-slate-800 rounded-xl h-96 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
-                <Monitor className="w-16 h-16 text-indigo-500/40 mb-3 animate-pulse" />
-                <h4 className="text-sm font-semibold text-slate-300">Remote Desktop Frame Stream Ready</h4>
-                <p className="text-xs text-slate-500 max-w-sm mt-1">
-                  Connecting to X11 Display server via VNC Tunnel on port 5900.
-                </p>
+              <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden min-h-[420px] flex flex-col relative">
+                {/* VNC Controls Bar */}
+                <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex justify-between items-center text-xs text-slate-300">
+                  <div className="flex items-center space-x-2 font-mono text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Target: {activeServerData.hostname}:6080</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => {
+                        const iframe = document.getElementById("vncFrame") as HTMLIFrameElement;
+                        if (iframe) iframe.src = iframe.src;
+                      }}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 text-[11px] transition flex items-center space-x-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Reconnect</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const frame = document.getElementById("vncFrame");
+                        if (frame && frame.requestFullscreen) frame.requestFullscreen();
+                      }}
+                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] transition font-medium"
+                    >
+                      Fullscreen
+                    </button>
+                  </div>
+                </div>
 
-                <div className="mt-6 flex space-x-3">
-                  <button
-                    onClick={() => alert("Launching noVNC Remote Session...")}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-semibold transition shadow-lg shadow-indigo-600/20 flex items-center space-x-1.5"
-                  >
-                    <Play className="w-3.5 h-3.5" />
-                    <span>Connect VNC Display</span>
-                  </button>
+                {/* VNC Canvas / Iframe Viewer */}
+                <div className="flex-1 w-full h-[400px] bg-slate-950 flex items-center justify-center relative">
+                  <iframe
+                    id="vncFrame"
+                    src={`http://localhost:6080/vnc.html?host=localhost&port=6080&autoconnect=true&resize=scale`}
+                    className="w-full h-full border-0 bg-slate-950"
+                    title="noVNC Remote Desktop Stream"
+                    onError={() => console.log("VNC display loading...")}
+                  />
                 </div>
               </div>
             </div>
