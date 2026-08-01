@@ -46,15 +46,15 @@ echo -e "${GREEN}[✓] System directories created successfully.${NC}"
 # Step 2: Check & Install Lightweight TigerVNC / Xvnc & websockify (35%)
 print_progress 35 "Checking TigerVNC and websockify for noVNC Remote GUI..."
 if ! command -v Xvnc >/dev/null 2>&1 && ! command -v vncserver >/dev/null 2>&1 || ! command -v websockify >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
-  echo -e "${BLUE}[PulseOps] Installing lightweight TigerVNC server, websockify & python3 dependencies...${NC}"
+  echo -e "${BLUE}[PulseOps] Installing lightweight TigerVNC server, xterm, websockify & python3 dependencies...${NC}"
   if command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-pip tigervnc-standalone-server tigervnc-common websockify novnc || true
+    sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-pip tigervnc-standalone-server tigervnc-common websockify novnc xterm twm x11-xserver-utils || true
   elif command -v dnf >/dev/null 2>&1; then
     sudo dnf install -y epel-release 2>/dev/null || true
-    sudo dnf install -y python3 python3-pip tigervnc-server websockify novnc || true
+    sudo dnf install -y python3 python3-pip tigervnc-server websockify novnc xterm twm xorg-x11-server-utils || true
   elif command -v yum >/dev/null 2>&1; then
     sudo yum install -y epel-release 2>/dev/null || true
-    sudo yum install -y python3 python3-pip tigervnc-server websockify novnc || true
+    sudo yum install -y python3 python3-pip tigervnc-server websockify novnc xterm twm xorg-x11-server-utils || true
   fi
 
   if ! command -v websockify >/dev/null 2>&1; then
@@ -125,6 +125,31 @@ elif [ -f "/usr/bin/Xvnc" ]; then
   /usr/bin/Xvnc :99 -geometry 1280x720 -depth 24 -rfbport 5900 -SecurityTypes None -AlwaysShared=1 >/dev/null 2>&1 &
 fi
 sleep 1
+
+# Launch desktop shell / window manager / terminal inside display :99
+export DISPLAY=:99
+
+if command -v xsetroot >/dev/null 2>&1; then
+  xsetroot -solid "#1e1e2e" >/dev/null 2>&1 || true
+fi
+
+# Launch window manager if installed
+if command -v fluxbox >/dev/null 2>&1; then
+  fluxbox >/dev/null 2>&1 &
+elif command -v openbox >/dev/null 2>&1; then
+  openbox >/dev/null 2>&1 &
+elif command -v twm >/dev/null 2>&1; then
+  twm >/dev/null 2>&1 &
+fi
+
+# Launch an interactive terminal window
+if command -v xterm >/dev/null 2>&1; then
+  xterm -geometry 110x34+40+40 -bg "#0f172a" -fg "#38bdf8" -title "PulseOps Remote Terminal (:99)" -e "bash -l" >/dev/null 2>&1 &
+elif command -v xfce4-terminal >/dev/null 2>&1; then
+  xfce4-terminal --geometry=110x34+40+40 >/dev/null 2>&1 &
+elif command -v gnome-terminal >/dev/null 2>&1; then
+  gnome-terminal --geometry=110x34+40+40 >/dev/null 2>&1 &
+fi
 
 # Discover valid noVNC HTML directory
 NOVNC_DIR=""
