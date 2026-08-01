@@ -4,15 +4,18 @@ declare global {
   var _serverStore: Map<string, any> | undefined;
   var _metricsHistory: Map<string, any[]> | undefined;
   var _terminalLogs: Map<string, string[]> | undefined;
+  var _removedServers: Set<string> | undefined;
 }
 
 if (!globalThis._serverStore) globalThis._serverStore = new Map();
 if (!globalThis._metricsHistory) globalThis._metricsHistory = new Map();
 if (!globalThis._terminalLogs) globalThis._terminalLogs = new Map();
+if (!globalThis._removedServers) globalThis._removedServers = new Set();
 
 const serverStore = globalThis._serverStore;
 const metricsHistory = globalThis._metricsHistory;
 const terminalLogs = globalThis._terminalLogs;
+const removedServers = globalThis._removedServers;
 
 export async function POST(request: Request) {
   try {
@@ -22,6 +25,11 @@ export async function POST(request: Request) {
     // Handle metrics telemetry from Agent
     if (body.hostname && body.cpu_usage !== undefined) {
       const agentId = body.hostname;
+
+      // Ignore telemetry from server nodes that have been removed by an Admin
+      if (removedServers.has(agentId)) {
+        return NextResponse.json({ status: 'ignored', message: 'Server node removed from database' });
+      }
       const serverData = {
         hostname: body.hostname,
         status: 'ONLINE',
