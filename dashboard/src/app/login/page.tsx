@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, Lock, Mail, Activity, Eye, KeyRound, Server, AlertCircle } from "lucide-react";
+import { Lock, Mail, Activity, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -122,39 +122,9 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full mt-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl transition text-sm flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/20"
           >
-            <span>{loading ? "Authenticating..." : "Authenticate Session"}</span>
+            <span>{loading ? "Authenticating..." : "Sign In"}</span>
           </button>
         </form>
-
-        {/* Preset Enterprise Roles */}
-        <div className="mt-8 pt-6 border-t border-slate-800/80">
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 text-center">
-            Select Role Credentials
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setPresetUser("ADMIN")}
-              className="p-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 transition text-left flex items-start space-x-2.5"
-            >
-              <ShieldCheck className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
-              <div>
-                <span className="block text-xs font-bold text-indigo-300">Admin</span>
-                <span className="block text-[10px] text-slate-400">Control & Reboot</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setPresetUser("VIEWER")}
-              className="p-3 rounded-xl border border-slate-700 bg-slate-800/40 hover:bg-slate-800/70 transition text-left flex items-start space-x-2.5"
-            >
-              <Eye className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-              <div>
-                <span className="block text-xs font-bold text-slate-300">Viewer User</span>
-                <span className="block text-[10px] text-slate-400">Read-Only Telemetry</span>
-              </div>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
