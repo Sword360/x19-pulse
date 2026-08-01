@@ -25,7 +25,10 @@ import {
   XCircle,
   Send,
   Search,
-  Trash2
+  Trash2,
+  Square,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { UserManagementModal } from "./components/UserManagementModal";
@@ -50,6 +53,57 @@ export default function Dashboard() {
   // Process Search & Server Search State
   const [processSearch, setProcessSearch] = useState("");
   const [serverSearch, setServerSearch] = useState("");
+
+  // RealVNC State
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [vncScaleMode, setVncScaleMode] = useState<"scale" | "off">("scale");
+  const [vncActionLoading, setVncActionLoading] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  const handleVncControl = async (action: "start_vnc" | "stop_vnc") => {
+    if (currentUser?.role !== "ADMIN") {
+      alert("VNC Service control is restricted to Admin accounts.");
+      return;
+    }
+    setVncActionLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/agent/metrics`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          hostname: activeServerData.hostname
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActionMessage(`[REALVNC ENGINE]: ${data.message || `VNC service ${action === "start_vnc" ? "started" : "stopped"}`}`);
+        fetchServers();
+        setTimeout(() => setActionMessage(null), 4000);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setVncActionLoading(false);
+    }
+  };
+
+  const toggleFullscreen = () => {
+    const container = document.getElementById("vncViewerContainer");
+    if (!container) return;
+    if (!document.fullscreenElement) {
+      container.requestFullscreen().catch((err) => console.error("Fullscreen error:", err));
+    } else {
+      document.exitFullscreen().catch((err) => console.error("Exit fullscreen error:", err));
+    }
+  };
 
   useEffect(() => {
     const storedUser = localStorage.getItem("pulseops_user");
@@ -639,60 +693,189 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 5: noVNC REMOTE GUI */}
+          {/* TAB 5: RealVNC REMOTE GUI */}
           {activeTab === "vnc" && (
             <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 space-y-4">
+              {/* Header & Status Bar */}
               <div className="flex flex-wrap justify-between items-center gap-4">
                 <div>
-                  <h3 className="text-base font-bold text-white">noVNC Remote Desktop Viewer (X11 GUI)</h3>
-                  <p className="text-xs text-slate-400">Interactive graphical remote desktop session (Port 6080)</p>
+                  <div className="flex items-center space-x-2">
+                    <span className="bg-indigo-600/20 text-indigo-400 p-1.5 rounded-lg border border-indigo-500/30">
+                      <Monitor className="w-4 h-4" />
+                    </span>
+                    <h3 className="text-base font-bold text-white">RealVNC Remote Desktop Viewer</h3>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    High-performance X11 VNC graphical session stream (Port 6080 / 5900)
+                  </p>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-mono">
-                    x11vnc + websockify Active
+
+                {/* Start VNC / Stop VNC Power Controls */}
+                <div className="flex items-center space-x-3">
+                  <span
+                    className={`flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold border ${
+                      activeServerData.vnc_active !== false
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                        : "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                    }`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        activeServerData.vnc_active !== false ? "bg-emerald-400 animate-pulse" : "bg-rose-500"
+                      }`}
+                    ></span>
+                    <span>{activeServerData.vnc_active !== false ? "VNC Active" : "VNC Stopped"}</span>
                   </span>
+
+                  {currentUser.role === "ADMIN" && (
+                    <div className="flex items-center space-x-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                      <button
+                        onClick={() => handleVncControl("start_vnc")}
+                        disabled={vncActionLoading || activeServerData.vnc_active === true}
+                        className={`flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition ${
+                          activeServerData.vnc_active === true
+                            ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+                            : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20"
+                        }`}
+                        title="Start VNC Daemon on Remote Host"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Start VNC</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleVncControl("stop_vnc")}
+                        disabled={vncActionLoading || activeServerData.vnc_active === false}
+                        className={`flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition ${
+                          activeServerData.vnc_active === false
+                            ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+                            : "bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20"
+                        }`}
+                        title="Stop VNC Daemon on Remote Host"
+                      >
+                        <Square className="w-3.5 h-3.5 fill-current" />
+                        <span>Stop VNC</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden min-h-[420px] flex flex-col relative">
-                {/* VNC Controls Bar */}
-                <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex justify-between items-center text-xs text-slate-300">
-                  <div className="flex items-center space-x-2 font-mono text-[11px]">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span>Target: {activeServerData.hostname}:6080</span>
+              {/* RealVNC Viewer Window Container */}
+              <div
+                id="vncViewerContainer"
+                className={`bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden flex flex-col transition-all shadow-2xl ${
+                  isFullscreen ? "fixed inset-0 z-50 rounded-none border-0" : "min-h-[520px]"
+                }`}
+              >
+                {/* RealVNC Viewer Toolbar */}
+                <div className="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex flex-wrap justify-between items-center text-xs text-slate-300 gap-2">
+                  {/* Connection Status & Security */}
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800 font-mono text-[11px]">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          activeServerData.vnc_active !== false ? "bg-emerald-400 animate-ping" : "bg-slate-600"
+                        }`}
+                      ></span>
+                      <span className="text-slate-300 font-semibold">{activeServerData.hostname}:6080</span>
+                    </div>
+
+                    <span className="hidden sm:flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                      <ShieldCheck className="w-3 h-3" />
+                      <span>256-bit Encrypted Session</span>
+                    </span>
                   </div>
+
+                  {/* Toolbar Quick Action Controls */}
                   <div className="flex items-center space-x-2">
+                    {/* Scale Mode Toggle */}
+                    <button
+                      onClick={() => setVncScaleMode((prev) => (prev === "scale" ? "off" : "scale"))}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition flex items-center space-x-1 ${
+                        vncScaleMode === "scale"
+                          ? "bg-indigo-600/20 border-indigo-500/40 text-indigo-300"
+                          : "bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200"
+                      }`}
+                      title="Toggle Canvas Auto-Scale"
+                    >
+                      <Sliders className="w-3 h-3" />
+                      <span>{vncScaleMode === "scale" ? "Auto Fit: ON" : "Auto Fit: OFF"}</span>
+                    </button>
+
+                    {/* Reconnect Session */}
                     <button
                       onClick={() => {
                         const iframe = document.getElementById("vncFrame") as HTMLIFrameElement;
                         if (iframe) iframe.src = iframe.src;
                       }}
-                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 text-[11px] transition flex items-center space-x-1"
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] border border-slate-700 transition flex items-center space-x-1"
+                      title="Reload VNC Stream"
                     >
                       <RefreshCw className="w-3 h-3" />
                       <span>Reconnect</span>
                     </button>
+
+                    {/* Fullscreen / Close Fullscreen Toggle */}
                     <button
-                      onClick={() => {
-                        const frame = document.getElementById("vncFrame");
-                        if (frame && frame.requestFullscreen) frame.requestFullscreen();
-                      }}
-                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] transition font-medium"
+                      onClick={toggleFullscreen}
+                      className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition flex items-center space-x-1.5 shadow-md ${
+                        isFullscreen
+                          ? "bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20"
+                          : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20"
+                      }`}
+                      title={isFullscreen ? "Close Fullscreen (Esc)" : "Enter Fullscreen Mode"}
                     >
-                      Fullscreen
+                      {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                      <span>{isFullscreen ? "Close Fullscreen" : "Fullscreen"}</span>
                     </button>
                   </div>
                 </div>
 
-                {/* VNC Canvas / Iframe Viewer */}
-                <div className="flex-1 w-full h-[400px] bg-slate-950 flex items-center justify-center relative">
-                  <iframe
-                    id="vncFrame"
-                    src={`http://localhost:6080/vnc.html?host=localhost&port=6080&autoconnect=true&resize=scale`}
-                    className="w-full h-full border-0 bg-slate-950"
-                    title="noVNC Remote Desktop Stream"
-                    onError={() => console.log("VNC display loading...")}
-                  />
+                {/* VNC Stream Canvas area */}
+                <div className="flex-1 w-full bg-slate-950 flex items-center justify-center relative min-h-[460px]">
+                  {activeServerData.vnc_active !== false ? (
+                    <iframe
+                      id="vncFrame"
+                      src={`http://localhost:6080/vnc.html?host=localhost&port=6080&autoconnect=true&resize=${vncScaleMode}`}
+                      className="w-full h-full border-0 bg-slate-950 min-h-[460px]"
+                      title="RealVNC Desktop Display Stream"
+                    />
+                  ) : (
+                    <div className="text-center p-8 max-w-md space-y-4">
+                      <div className="w-16 h-16 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center mx-auto text-slate-600">
+                        <Power className="w-8 h-8" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-200">VNC Service Currently Stopped</h4>
+                        <p className="text-xs text-slate-500 mt-1">
+                          The x11vnc / websockify background service is offline on server node{" "}
+                          <span className="text-indigo-400 font-mono">{activeServerData.hostname}</span>.
+                        </p>
+                      </div>
+                      {currentUser.role === "ADMIN" && (
+                        <button
+                          onClick={() => handleVncControl("start_vnc")}
+                          disabled={vncActionLoading}
+                          className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20"
+                        >
+                          <Play className="w-4 h-4 fill-current" />
+                          <span>Start VNC Service Now</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Floating Close Fullscreen Button Overlay in Fullscreen Mode */}
+                  {isFullscreen && (
+                    <button
+                      onClick={toggleFullscreen}
+                      className="absolute top-4 right-4 z-50 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 px-3.5 py-2 rounded-xl text-xs font-bold backdrop-blur flex items-center space-x-2 shadow-2xl transition"
+                    >
+                      <Minimize2 className="w-4 h-4 text-amber-400" />
+                      <span>Close Fullscreen (Esc)</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

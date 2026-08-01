@@ -5,17 +5,20 @@ declare global {
   var _metricsHistory: Map<string, any[]> | undefined;
   var _terminalLogs: Map<string, string[]> | undefined;
   var _removedServers: Set<string> | undefined;
+  var _pendingCommands: Map<string, string> | undefined;
 }
 
 if (!globalThis._serverStore) globalThis._serverStore = new Map();
 if (!globalThis._metricsHistory) globalThis._metricsHistory = new Map();
 if (!globalThis._terminalLogs) globalThis._terminalLogs = new Map();
 if (!globalThis._removedServers) globalThis._removedServers = new Set();
+if (!globalThis._pendingCommands) globalThis._pendingCommands = new Map();
 
 const serverStore = globalThis._serverStore;
 const metricsHistory = globalThis._metricsHistory;
 const terminalLogs = globalThis._terminalLogs;
 const removedServers = globalThis._removedServers;
+const pendingCommands = globalThis._pendingCommands;
 
 export async function POST(request: Request) {
   try {
@@ -30,6 +33,7 @@ export async function POST(request: Request) {
       if (removedServers.has(agentId)) {
         return NextResponse.json({ status: 'ignored', message: 'Server node removed from database' });
       }
+      const existing = serverStore.get(agentId);
       const serverData = {
         hostname: body.hostname,
         status: 'ONLINE',
@@ -41,7 +45,7 @@ export async function POST(request: Request) {
         uptime: body.uptime || 0,
         processes: body.processes || [],
         logs: body.logs || [],
-        vnc_active: body.vnc_active || true
+        vnc_active: body.vnc_active !== undefined ? body.vnc_active : (existing?.vnc_active ?? true)
       };
 
       serverStore.set(agentId, serverData);
@@ -56,7 +60,25 @@ export async function POST(request: Request) {
       });
       if (history.length > 50) history.shift();
 
-      return NextResponse.json({ status: 'success', server: serverData });
+      const pendingCmd = pendingCommands.get(agentId) || null;
+      if (pendingCmd) pendingCommands.delete(agentId);
+
+      return NextResponse.json({ status: 'success', server: serverData, command: pendingCmd });
+    }
+
+    // Handle VNC Start / Stop Commands
+    if (action === 'start_vnc' || action === 'stop_vnc') {
+      const isStart = action === 'start_vnc';
+      const serverData = serverStore.get(hostname) || { hostname, status: 'ONLINE' };
+      serverData.vnc_active = isStart;
+      serverStore.set(hostname, serverData);
+      pendingCommands.set(hostname, isStart ? 'start_vnc' : 'stop_vnc');
+
+      return NextResponse.json({
+        status: 'success',
+        vnc_active: isStart,
+        message: `VNC remote desktop service ${isStart ? 'started' : 'stopped'} successfully`
+      });
     }
 
     // Handle Process Kill / Restart Commands

@@ -148,6 +148,13 @@ def get_system_logs():
             logs = ["Journalctl log service active. Running under systemd daemon context."]
     return logs
 
+def check_vnc_active():
+    try:
+        output = subprocess.check_output(["pgrep", "-f", "websockify|x11vnc"], stderr=subprocess.DEVNULL)
+        return len(output.strip()) > 0
+    except Exception:
+        return False
+
 def collect_metrics():
     mem = get_memory_info()
     disk = get_disk_usage()
@@ -164,7 +171,7 @@ def collect_metrics():
         "load_avg": load,
         "processes": procs,
         "logs": logs,
-        "vnc_active": True,
+        "vnc_active": check_vnc_active(),
         "timestamp": int(time.time())
     }
 
@@ -181,6 +188,20 @@ def send_metrics(config, payload):
     ctx.verify_mode = ssl.CERT_NONE
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+            if resp.status == 200:
+                resp_body = resp.read().decode("utf-8")
+                try:
+                    res_json = json.loads(resp_body)
+                    cmd = res_json.get("command")
+                    if cmd == "start_vnc":
+                        res = subprocess.run(["systemctl", "start", "pulseops-vnc"], check=False)
+                        if res.returncode != 0 and os.path.exists("/opt/pulseops/vnc-start.sh"):
+                            subprocess.Popen(["/bin/bash", "/opt/pulseops/vnc-start.sh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    elif cmd == "stop_vnc":
+                        subprocess.run(["systemctl", "stop", "pulseops-vnc"], check=False)
+                        subprocess.run(["pkill", "-9", "-f", "websockify|x11vnc"], check=False)
+                except Exception:
+                    pass
             return resp.status == 200
     except Exception as e:
         print(f"[PulseOps Agent] Transmit status: {e}", file=sys.stderr)
