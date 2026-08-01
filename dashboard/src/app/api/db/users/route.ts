@@ -30,7 +30,7 @@ if (!globalThis._dbUsers) {
 
 const dbUsers = globalThis._dbUsers;
 
-// GET: Fetch all users from Supabase REST API / Memory
+// GET: Fetch all users
 export async function GET() {
   try {
     const { data: supaUsers, error } = await supabase.from('users').select('id, name, email, role, created_at');
@@ -40,11 +40,11 @@ export async function GET() {
         name: u.name,
         email: u.email,
         role: u.role,
-        createdAt: u.created_at || "2026-08-01"
+        createdAt: u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : "2026-08-01"
       })));
     }
   } catch (e) {
-    console.error("Supabase REST API fallback:", e);
+    console.error("Supabase GET error:", e);
   }
 
   const prisma = getPrisma();
@@ -63,7 +63,7 @@ export async function GET() {
   return NextResponse.json(safeUsers);
 }
 
-// POST: Create a new user account (Admin permission required)
+// POST: Create new user account (Admin permission required)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -79,27 +79,39 @@ export async function POST(request: Request) {
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
+    const cleanEmail = email.trim().toLowerCase();
 
-    // Save to Supabase Cloud Database via REST API
+    // 1. Try Supabase REST API
     try {
       const { data, error } = await supabase.from('users').insert([
         {
           name,
-          email: email.toLowerCase(),
+          email: cleanEmail,
           password_hash: passwordHash,
           role: role === 'ADMIN' ? 'ADMIN' : 'VIEWER'
         }
       ]).select('id, name, email, role, created_at').single();
 
       if (!error && data) {
-        return NextResponse.json({ status: 'success', user: data });
+        return NextResponse.json({
+          status: 'success',
+          user: {
+            id: data.id,
+            name: data.name,
+            email: data.email,
+            role: data.role,
+            createdAt: data.created_at ? new Date(data.created_at).toISOString().split('T')[0] : "2026-08-01"
+          }
+        });
+      } else if (error) {
+        console.error("Supabase insert error details:", error);
       }
     } catch (e) {
-      console.error("Supabase insert error:", e);
+      console.error("Supabase insert exception:", e);
     }
 
-    // In-memory fallback
-    const existing = dbUsers.find(u => u.email === email);
+    // 2. In-memory fallback
+    const existing = dbUsers.find(u => u.email.toLowerCase() === cleanEmail);
     if (existing) {
       return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
     }
@@ -107,7 +119,7 @@ export async function POST(request: Request) {
     const newUser = {
       id: Date.now().toString(),
       name,
-      email,
+      email: cleanEmail,
       passwordHash,
       role: role || 'VIEWER',
       createdAt: new Date().toISOString().split('T')[0]
@@ -118,6 +130,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: 'success', user: safeUser });
   } catch (e) {
     return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
+  }
+}
+
+// PUT: Reset user password (Admin permission required)
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, newPassword, requesterRole } = body;
+
+    if (requesterRole !== 'ADMIN') {
+      return NextResponse.json({ error: 'Permission denied: Only Admin users can reset passwords' }, { status: 403 });
+    }
+
+    if (!id || !newPassword) {
+      return NextResponse.json({ error: 'User ID and New Password required' }, { status: 400 });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    // Update Supabase
+    try {
+      const { error } = await supabase.from('users').update({ password_hash: passwordHash }).eq('id', id);
+      if (!error) {
+        return NextResponse.json({ status: 'success', message: 'Password updated in Supabase Database' });
+      }
+    } catch (e) {}
+
+    // In-memory update fallback
+    const user = dbUsers.find(u => u.id === id);
+    if (user) {
+      user.passwordHash = passwordHash;
+      return NextResponse.json({ status: 'success', message: 'Password updated successfully' });
+    }
+
+    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  } catch (e) {
+    return NextResponse.json({ error: 'Failed to reset password' }, { status: 500 });
   }
 }
 
@@ -136,13 +186,17 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
+    // Delete from Supabase
     try {
       const { error } = await supabase.from('users').delete().eq('id', id);
       if (!error) {
         return NextResponse.json({ status: 'success', message: 'User removed from Supabase Database' });
+      } else {
+        console.error("Supabase delete error:", error);
       }
     } catch (e) {}
 
+    // In-memory fallback
     const index = dbUsers.findIndex(u => u.id === id);
     if (index !== -1) {
       const removed = dbUsers.splice(index, 1);
