@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { UserManagementModal } from "./components/UserManagementModal";
+import { AddServerModal } from "./components/AddServerModal";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isAddServerModalOpen, setIsAddServerModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "processes" | "logs" | "terminal" | "vnc">("overview");
 
   // Terminal State
@@ -221,6 +223,14 @@ export default function Dashboard() {
               {currentUser.role}
             </span>
           </div>
+
+          <button
+            onClick={() => setIsAddServerModalOpen(true)}
+            className="flex items-center space-x-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl font-semibold transition shadow-md shadow-indigo-600/20"
+          >
+            <Server className="w-3.5 h-3.5" />
+            <span>+ Add Server</span>
+          </button>
 
           {currentUser.role === "ADMIN" && (
             <button
@@ -603,6 +613,7 @@ export default function Dashboard() {
       </div>
 
       <UserManagementModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} />
+      <AddServerModal isOpen={isAddServerModalOpen} onClose={() => setIsAddServerModalOpen(false)} />
     </div>
   );
 }

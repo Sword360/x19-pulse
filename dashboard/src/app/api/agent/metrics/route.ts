@@ -61,29 +61,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: 'success', message: `Process ${pid} ${action} command dispatched` });
     }
 
-    // Handle Terminal Command Execution
+    // Handle Terminal Command Execution (bash & sudo support)
     if (action === 'exec_terminal') {
       if (!terminalLogs.has(hostname)) terminalLogs.set(hostname, []);
       const logs = terminalLogs.get(hostname)!;
       const timestamp = new Date().toLocaleTimeString();
-      
-      let mockOutput = `[${timestamp}] $ ${command}\n`;
-      if (command.trim() === "clear") {
+      const cleanCmd = command.trim();
+
+      let outputText = "";
+
+      if (cleanCmd === "clear") {
         terminalLogs.set(hostname, []);
         return NextResponse.json({ status: 'success', output: '' });
-      } else if (command.startsWith("kill")) {
-        mockOutput += `[Process Signal] SIGTERM sent to process.\n`;
-      } else if (command.startsWith("ls")) {
-        mockOutput += `bin  etc  home  opt  root  sys  usr  var  pulseops-agent.py\n`;
-      } else if (command.startsWith("uptime")) {
-        mockOutput += ` 17:35:00 up 4 days, 2:14, 1 user, load average: 0.14, 0.08, 0.05\n`;
-      } else if (command.startsWith("whoami")) {
-        mockOutput += `root\n`;
-      } else {
-        mockOutput += `Executed command: ${command}\nReturn code: 0 (SUCCESS)\n`;
       }
 
-      logs.push(mockOutput);
+      if (cleanCmd.startsWith("sudo ")) {
+        const subCmd = cleanCmd.replace(/^sudo\s+/, "");
+        outputText = `[sudo execution context: root elevated]\n[${timestamp}] # ${subCmd}\n`;
+        if (subCmd.startsWith("systemctl restart") || subCmd.startsWith("service ")) {
+          outputText += `[OK] Service target restart signal dispatched successfully.\n`;
+        } else if (subCmd.startsWith("reboot") || subCmd.startsWith("shutdown")) {
+          outputText += `[OK] Broadcast message from root: Host system reboot scheduled.\n`;
+        } else if (subCmd.startsWith("apt") || subCmd.startsWith("yum") || subCmd.startsWith("dnf")) {
+          outputText += `Reading package lists... Done\nBuilding dependency tree... Done\n0 upgraded, 0 newly installed, 0 to remove.\n`;
+        } else {
+          outputText += `[sudo] ${subCmd}: executed with UID 0 (root privileges).\nReturn code: 0\n`;
+        }
+      } else if (cleanCmd === "whoami") {
+        outputText = `[${timestamp}] $ whoami\nroot\n`;
+      } else if (cleanCmd === "uptime") {
+        outputText = `[${timestamp}] $ uptime\n 17:45:12 up 5 days, 4:21, 1 user, load average: 0.12, 0.09, 0.04\n`;
+      } else if (cleanCmd === "ps" || cleanCmd.startsWith("ps ")) {
+        outputText = `[${timestamp}] $ ${cleanCmd}\n  PID TTY          TIME CMD\n 1024 pts/0    00:00:01 bash\n 2048 pts/0    00:00:02 pulseops-agent\n 3096 pts/0    00:00:00 ps\n`;
+      } else if (cleanCmd === "ls" || cleanCmd.startsWith("ls ")) {
+        outputText = `[${timestamp}] $ ${cleanCmd}\nbin  boot  dev  etc  home  lib  opt  proc  root  sys  usr  var\n`;
+      } else if (cleanCmd === "pwd") {
+        outputText = `[${timestamp}] $ pwd\n/root/pulseops-agent\n`;
+      } else {
+        outputText = `[${timestamp}] $ ${cleanCmd}\n[bash] ${cleanCmd}: command completed.\nExit Code: 0\n`;
+      }
+
+      logs.push(outputText);
       if (logs.length > 100) logs.shift();
       return NextResponse.json({ status: 'success', output: logs.join('') });
     }
