@@ -28,7 +28,9 @@ import {
   Trash2,
   Square,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Copy,
+  CheckCircle
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { UserManagementModal } from "./components/UserManagementModal";
@@ -36,7 +38,10 @@ import { AddServerModal } from "./components/AddServerModal";
 
 export default function Dashboard() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role: "ADMIN" | "VIEWER" } | null>(null);
+
+  // Auth & Admin State
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [usersList, setUsersList] = useState<any[]>([]);
   const [servers, setServers] = useState<any[]>([]);
   const [selectedServer, setSelectedServer] = useState<string | null>(null);
   const [history, setHistory] = useState<any[]>([]);
@@ -48,14 +53,19 @@ export default function Dashboard() {
 
   // Terminal State
   const [terminalInput, setTerminalInput] = useState("");
-  const [terminalOutput, setTerminalOutput] = useState("$ PulseOps Web Shell Initialized.\n$ Type commands below (e.g. ps, uptime, ls, whoami)\n");
+  const [terminalOutput, setTerminalOutput] = useState("$ PulseOps GNOME Terminal Web Shell Initialized.\n$ Type Linux commands below (e.g. ls -la, pwd, uptime, ps aux, cat /etc/os-release, sudo apt ...)\n\n");
   const [cmdHistory, setCmdHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [copiedTerminal, setCopiedTerminal] = useState(false);
   const terminalEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (activeTab === "terminal" && terminalEndRef.current) {
-      terminalEndRef.current.scrollTop = terminalEndRef.current.scrollHeight;
+    if (activeTab === "terminal") {
+      if (terminalEndRef.current) {
+        terminalEndRef.current.scrollTop = terminalEndRef.current.scrollHeight;
+      }
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [terminalOutput, activeTab]);
 
@@ -249,11 +259,16 @@ export default function Dashboard() {
     }
   };
 
-  const handleTerminalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!terminalInput.trim()) return;
+  const handleCopyTerminal = () => {
+    navigator.clipboard.writeText(terminalOutput);
+    setCopiedTerminal(true);
+    setTimeout(() => setCopiedTerminal(false), 2000);
+  };
 
-    const cmd = terminalInput;
+  const handleTerminalSubmitWithCmd = async (cmdToRun: string) => {
+    if (!cmdToRun.trim()) return;
+
+    const cmd = cmdToRun;
     setTerminalInput("");
     setCmdHistory((prev) => [cmd, ...prev]);
     setHistoryIndex(-1);
@@ -293,6 +308,11 @@ export default function Dashboard() {
     } catch (e) {
       setTerminalOutput((prev) => prev + `$ ${cmd}\nExecution failed (Connection Error).\n`);
     }
+  };
+
+  const handleTerminalSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleTerminalSubmitWithCmd(terminalInput);
   };
 
   const handleTerminalKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -717,52 +737,145 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 4: WEB TERMINAL */}
+          {/* TAB 4: WEB TERMINAL (GNOME TERMINAL STYLE) */}
           {activeTab === "terminal" && (
-            <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="flex justify-between items-center flex-wrap gap-2">
+            <div className="space-y-4">
+              {/* Terminal Control Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 border border-slate-800 p-4 rounded-2xl">
                 <div>
-                  <h3 className="text-base font-bold text-white">Interactive Web Terminal (PTY / Bash)</h3>
-                  <p className="text-xs text-slate-400">Execute Linux commands directly on host shell (Use ↑/↓ for history)</p>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Terminal className="w-5 h-5 text-indigo-400" />
+                    <span>GNOME Terminal Web Shell</span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Interactive Linux console session connected to <code className="text-indigo-300 font-mono">{activeServerData.hostname}</code> (Use ↑/↓ for history)
+                  </p>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-mono flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Bash Shell Connected
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-full font-mono flex items-center gap-1.5 shadow-sm">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span>Bash Connected</span>
                   </span>
-                </div>
-              </div>
-
-              <div
-                ref={terminalEndRef}
-                className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-emerald-400 h-96 overflow-y-auto whitespace-pre-wrap select-text shadow-inner"
-              >
-                {terminalOutput}
-              </div>
-
-              {currentUser.role === "ADMIN" ? (
-                <form onSubmit={handleTerminalSubmit} className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={terminalInput}
-                    onChange={(e) => setTerminalInput(e.target.value)}
-                    onKeyDown={handleTerminalKeyDown}
-                    placeholder="Enter any Linux command (e.g. ls -la, pwd, cat, sudo, uptime, docker ps, clear)..."
-                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500 transition"
-                  />
                   <button
-                    type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-lg shadow-indigo-600/20"
+                    onClick={handleCopyTerminal}
+                    className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 transition active:scale-95"
+                    title="Copy terminal logs"
                   >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Run</span>
+                    {copiedTerminal ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedTerminal ? "Copied!" : "Copy Output"}</span>
                   </button>
-                </form>
-              ) : (
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-500 text-center">
-                  Terminal execution is restricted to Admin role accounts.
+                  <button
+                    onClick={() => handleTerminalSubmitWithCmd("clear")}
+                    className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 transition active:scale-95"
+                    title="Clear terminal screen"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Clear</span>
+                  </button>
                 </div>
-              )}
+              </div>
+
+              {/* GNOME Terminal Authentic Window Frame */}
+              <div
+                onClick={() => inputRef.current?.focus()}
+                className="bg-[#17191C] border border-slate-700/80 rounded-2xl overflow-hidden shadow-2xl transition-all duration-200 cursor-text"
+              >
+                {/* Titlebar with GNOME window controls */}
+                <div className="bg-[#21252B] border-b border-slate-800 px-4 py-2.5 flex items-center justify-between select-none">
+                  {/* Left: Window buttons (Red, Yellow, Green) */}
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-[#FF5F56] border border-[#E0443E] hover:opacity-80 transition cursor-pointer"></div>
+                    <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-[#DEA123] hover:opacity-80 transition cursor-pointer"></div>
+                    <div className="w-3 h-3 rounded-full bg-[#27C93F] border border-[#1AAB29] hover:opacity-80 transition cursor-pointer"></div>
+                  </div>
+
+                  {/* Center: Window Title */}
+                  <div className="flex items-center space-x-2 text-xs font-mono text-slate-300">
+                    <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="font-semibold text-slate-200">{activeServerData.hostname || "localhost"}</span>
+                    <span className="text-slate-500">— bash — 80x24</span>
+                  </div>
+
+                  {/* Right: Environment Info */}
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-[10px] font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+                      GNOME 46.0
+                    </span>
+                  </div>
+                </div>
+
+                {/* Viewport Canvas */}
+                <div
+                  ref={terminalEndRef}
+                  className="p-4 sm:p-5 font-mono text-xs sm:text-sm text-emerald-400 h-[420px] sm:h-[480px] md:h-[520px] overflow-y-auto whitespace-pre-wrap select-text leading-relaxed bg-[#0C1017] scrollbar-thin scrollbar-thumb-slate-800"
+                >
+                  {terminalOutput}
+                </div>
+
+                {/* Interactive Shell Input Line */}
+                {currentUser.role === "ADMIN" ? (
+                  <form onSubmit={handleTerminalSubmit} className="bg-[#181C24] border-t border-slate-800/80 p-2.5 sm:p-3 flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    <div className="flex items-center text-xs font-mono text-emerald-400 pl-2 pr-1 select-none font-bold shrink-0">
+                      <span className="text-emerald-400">{currentUser.name || 'admin'}</span>
+                      <span className="text-slate-400">@</span>
+                      <span className="text-indigo-400">{activeServerData.hostname || 'local'}</span>
+                      <span className="text-slate-400">:</span>
+                      <span className="text-sky-400">~</span>
+                      <span className="text-slate-200 ml-1">$</span>
+                    </div>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={terminalInput}
+                      onChange={(e) => setTerminalInput(e.target.value)}
+                      onKeyDown={handleTerminalKeyDown}
+                      placeholder="Type Linux command (e.g. ls -la, pwd, cat, sudo, docker ps)..."
+                      className="flex-1 min-w-[200px] bg-transparent text-slate-100 font-mono text-xs sm:text-sm focus:outline-none placeholder-slate-600 caret-emerald-400"
+                      autoComplete="off"
+                      spellCheck="false"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold flex items-center space-x-1.5 transition shadow active:scale-95 shrink-0"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Run</span>
+                    </button>
+                  </form>
+                ) : (
+                  <div className="p-3 bg-[#14171D] border-t border-slate-800 text-xs text-slate-500 text-center font-mono">
+                    Terminal execution restricted to Admin users.
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Command Toolbar */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-xs text-slate-400 font-semibold flex items-center gap-1 mr-1">
+                  <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                  Quick Commands:
+                </span>
+                {[
+                  { label: "ls -la", cmd: "ls -la" },
+                  { label: "pwd", cmd: "pwd" },
+                  { label: "df -h", cmd: "df -h" },
+                  { label: "free -m", cmd: "free -m" },
+                  { label: "uptime", cmd: "uptime" },
+                  { label: "ps aux", cmd: "ps aux" },
+                  { label: "whoami", cmd: "whoami" },
+                  { label: "os-release", cmd: "cat /etc/os-release" },
+                  { label: "ip addr", cmd: "ip a" }
+                ].map((chip) => (
+                  <button
+                    key={chip.cmd}
+                    onClick={() => handleTerminalSubmitWithCmd(chip.cmd)}
+                    className="bg-slate-900 hover:bg-indigo-950 text-slate-300 hover:text-indigo-300 border border-slate-800 hover:border-indigo-800/60 px-2.5 py-1 rounded-lg font-mono text-[11px] transition shadow-sm active:scale-95"
+                  >
+                    $ {chip.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
