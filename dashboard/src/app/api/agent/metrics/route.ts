@@ -149,7 +149,7 @@ export async function POST(request: Request) {
         uptime: body.uptime || 0,
         processes: body.processes || [],
         logs: body.logs || [],
-        vnc_active: body.vnc_active !== undefined ? body.vnc_active : (existing?.vnc_active ?? true)
+        vnc_active: body.vnc_active !== undefined ? body.vnc_active : (existing?.vnc_active ?? false)
       };
 
       serverStore.set(agentId, serverData);

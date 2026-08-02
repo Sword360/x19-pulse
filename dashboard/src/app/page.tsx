@@ -900,17 +900,17 @@ export default function Dashboard() {
                 <div className="flex items-center space-x-3">
                   <span
                     className={`flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold border ${
-                      activeServerData.vnc_active !== false
+                      activeServerData.vnc_active === true
                         ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                         : "bg-rose-500/10 text-rose-400 border-rose-500/30"
                     }`}
                   >
                     <span
                       className={`w-2 h-2 rounded-full ${
-                        activeServerData.vnc_active !== false ? "bg-emerald-400 animate-pulse" : "bg-rose-500"
+                        activeServerData.vnc_active === true ? "bg-emerald-400 animate-pulse" : "bg-rose-500"
                       }`}
                     ></span>
-                    <span>{activeServerData.vnc_active !== false ? "VNC Active" : "VNC Stopped"}</span>
+                    <span>{activeServerData.vnc_active === true ? "VNC Active" : "VNC Stopped"}</span>
                   </span>
 
                   {currentUser.role === "ADMIN" && (
@@ -931,9 +931,9 @@ export default function Dashboard() {
 
                       <button
                         onClick={() => handleVncControl("stop_vnc")}
-                        disabled={vncActionLoading || activeServerData.vnc_active === false}
+                        disabled={vncActionLoading || activeServerData.vnc_active !== true}
                         className={`flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition ${
-                          activeServerData.vnc_active === false
+                          activeServerData.vnc_active !== true
                             ? "bg-slate-800 text-slate-500 cursor-not-allowed"
                             : "bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20"
                         }`}
@@ -971,7 +971,7 @@ export default function Dashboard() {
                           <div className="flex items-center space-x-2 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800 font-mono text-[11px]">
                             <span
                               className={`w-2 h-2 rounded-full ${
-                                activeServerData.vnc_active !== false ? "bg-emerald-400 animate-ping" : "bg-slate-600"
+                                activeServerData.vnc_active === true ? "bg-emerald-400 animate-ping" : "bg-slate-600"
                               }`}
                             ></span>
                             <span className="text-slate-400 font-semibold">Target Host IP:</span>
@@ -1039,7 +1039,7 @@ export default function Dashboard() {
 
                       {/* VNC Stream Canvas area */}
                       <div className="flex-1 w-full bg-slate-950 flex items-center justify-center relative min-h-[460px]">
-                        {activeServerData.vnc_active !== false ? (
+                        {activeServerData.vnc_active === true ? (
                           <iframe
                             id="vncFrame"
                             src={`http://${effectiveVncHost}:6080/vnc.html?host=${effectiveVncHost}&port=6080&autoconnect=true&resize=${vncScaleMode}`}

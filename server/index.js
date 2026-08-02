@@ -163,7 +163,8 @@ app.post('/api/agent/metrics', async (req, res) => {
     memory: metrics.memory?.usage_pct || 0,
     disk: metrics.disk?.usage_pct || 0,
     load: metrics.load_avg || [0, 0, 0],
-    uptime: metrics.uptime || 0
+    uptime: metrics.uptime || 0,
+    vnc_active: metrics.vnc_active !== undefined ? metrics.vnc_active : false
   });
 
   if (!metricsHistory.has(agentId)) {
