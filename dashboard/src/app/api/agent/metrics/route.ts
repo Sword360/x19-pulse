@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { exec } from 'child_process';
+import os from 'os';
+import fs from 'fs';
 
 declare global {
   var _serverStore: Map<string, any> | undefined;
@@ -6,6 +9,7 @@ declare global {
   var _terminalLogs: Map<string, string[]> | undefined;
   var _removedServers: Set<string> | undefined;
   var _pendingCommands: Map<string, string> | undefined;
+  var _terminalCwds: Map<string, string> | undefined;
 }
 
 if (!globalThis._serverStore) globalThis._serverStore = new Map();
@@ -13,12 +17,112 @@ if (!globalThis._metricsHistory) globalThis._metricsHistory = new Map();
 if (!globalThis._terminalLogs) globalThis._terminalLogs = new Map();
 if (!globalThis._removedServers) globalThis._removedServers = new Set();
 if (!globalThis._pendingCommands) globalThis._pendingCommands = new Map();
+if (!globalThis._terminalCwds) globalThis._terminalCwds = new Map();
 
 const serverStore = globalThis._serverStore;
 const metricsHistory = globalThis._metricsHistory;
 const terminalLogs = globalThis._terminalLogs;
 const removedServers = globalThis._removedServers;
 const pendingCommands = globalThis._pendingCommands;
+const terminalCwds = globalThis._terminalCwds;
+
+async function executeLinuxCommand(hostname: string, command: string): Promise<string> {
+  const targetHost = hostname || 'localhost';
+  const cleanCmd = command.trim();
+
+  if (!terminalCwds.has(targetHost)) {
+    terminalCwds.set(targetHost, process.env.HOME || process.cwd());
+  }
+
+  if (cleanCmd === "clear") {
+    terminalLogs.set(targetHost, []);
+    return "";
+  }
+
+  let currentCwd = terminalCwds.get(targetHost)!;
+  if (!fs.existsSync(currentCwd)) {
+    currentCwd = process.env.HOME || process.cwd();
+    terminalCwds.set(targetHost, currentCwd);
+  }
+
+  const username = os.userInfo().username || 'root';
+  const homeDir = process.env.HOME || `/home/${username}`;
+  const displayCwd = currentCwd.startsWith(homeDir)
+    ? currentCwd.replace(homeDir, '~')
+    : currentCwd;
+
+  const isSudo = cleanCmd.startsWith('sudo ');
+  const promptSymbol = isSudo ? '#' : '$';
+  const displayUser = isSudo ? 'root' : username;
+  const promptLine = `${displayUser}@${targetHost}:${displayCwd}${promptSymbol} ${cleanCmd}\n`;
+
+  let execCmd = cleanCmd;
+  const isCd = cleanCmd === "cd" || cleanCmd.startsWith("cd ") || cleanCmd.startsWith("cd;");
+
+  if (isCd) {
+    execCmd = `${cleanCmd} && pwd`;
+  }
+
+  return new Promise((resolve) => {
+    exec(
+      execCmd,
+      {
+        cwd: currentCwd,
+        shell: '/bin/bash',
+        maxBuffer: 1024 * 1024 * 10,
+        env: { ...process.env, TERM: 'xterm-256color' },
+        timeout: 30000
+      },
+      (error, stdout, stderr) => {
+        let outputText = promptLine;
+
+        if (isCd) {
+          if (stdout && stdout.trim()) {
+            const lines = stdout.trim().split('\n');
+            const possibleNewCwd = lines[lines.length - 1].trim();
+            if (fs.existsSync(possibleNewCwd)) {
+              try {
+                if (fs.statSync(possibleNewCwd).isDirectory()) {
+                  terminalCwds.set(targetHost, possibleNewCwd);
+                }
+              } catch (e) {}
+            }
+            const outputLines = lines.slice(0, -1);
+            if (outputLines.length > 0) {
+              outputText += outputLines.join('\n') + '\n';
+            }
+          }
+          if (stderr) {
+            outputText += stderr;
+            if (!stderr.endsWith('\n')) outputText += '\n';
+          }
+          if (error && !stderr) {
+            outputText += `${error.message}\n`;
+          }
+        } else {
+          if (stdout) {
+            outputText += stdout;
+            if (!stdout.endsWith('\n')) outputText += '\n';
+          }
+          if (stderr) {
+            outputText += stderr;
+            if (!stderr.endsWith('\n')) outputText += '\n';
+          }
+          if (error && !stdout && !stderr) {
+            outputText += `${error.message}\n`;
+          }
+        }
+
+        if (!terminalLogs.has(targetHost)) terminalLogs.set(targetHost, []);
+        const logs = terminalLogs.get(targetHost)!;
+        logs.push(outputText);
+        if (logs.length > 100) logs.shift();
+
+        resolve(outputText);
+      }
+    );
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -91,49 +195,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: 'success', message: `Process ${pid} ${action} command dispatched` });
     }
 
-    // Handle Terminal Command Execution (bash & sudo support)
+    // Handle Terminal Command Execution (bash & real linux execution)
     if (action === 'exec_terminal') {
-      if (!terminalLogs.has(hostname)) terminalLogs.set(hostname, []);
-      const logs = terminalLogs.get(hostname)!;
-      const timestamp = new Date().toLocaleTimeString();
-      const cleanCmd = command.trim();
-
-      let outputText = "";
-
-      if (cleanCmd === "clear") {
-        terminalLogs.set(hostname, []);
-        return NextResponse.json({ status: 'success', output: '' });
-      }
-
-      if (cleanCmd.startsWith("sudo ")) {
-        const subCmd = cleanCmd.replace(/^sudo\s+/, "");
-        outputText = `[sudo execution context: root elevated]\n[${timestamp}] # ${subCmd}\n`;
-        if (subCmd.startsWith("systemctl restart") || subCmd.startsWith("service ")) {
-          outputText += `[OK] Service target restart signal dispatched successfully.\n`;
-        } else if (subCmd.startsWith("reboot") || subCmd.startsWith("shutdown")) {
-          outputText += `[OK] Broadcast message from root: Host system reboot scheduled.\n`;
-        } else if (subCmd.startsWith("apt") || subCmd.startsWith("yum") || subCmd.startsWith("dnf")) {
-          outputText += `Reading package lists... Done\nBuilding dependency tree... Done\n0 upgraded, 0 newly installed, 0 to remove.\n`;
-        } else {
-          outputText += `[sudo] ${subCmd}: executed with UID 0 (root privileges).\nReturn code: 0\n`;
-        }
-      } else if (cleanCmd === "whoami") {
-        outputText = `[${timestamp}] $ whoami\nroot\n`;
-      } else if (cleanCmd === "uptime") {
-        outputText = `[${timestamp}] $ uptime\n 17:45:12 up 5 days, 4:21, 1 user, load average: 0.12, 0.09, 0.04\n`;
-      } else if (cleanCmd === "ps" || cleanCmd.startsWith("ps ")) {
-        outputText = `[${timestamp}] $ ${cleanCmd}\n  PID TTY          TIME CMD\n 1024 pts/0    00:00:01 bash\n 2048 pts/0    00:00:02 pulseops-agent\n 3096 pts/0    00:00:00 ps\n`;
-      } else if (cleanCmd === "ls" || cleanCmd.startsWith("ls ")) {
-        outputText = `[${timestamp}] $ ${cleanCmd}\nbin  boot  dev  etc  home  lib  opt  proc  root  sys  usr  var\n`;
-      } else if (cleanCmd === "pwd") {
-        outputText = `[${timestamp}] $ pwd\n/root/pulseops-agent\n`;
-      } else {
-        outputText = `[${timestamp}] $ ${cleanCmd}\n[bash] ${cleanCmd}: command completed.\nExit Code: 0\n`;
-      }
-
-      logs.push(outputText);
-      if (logs.length > 100) logs.shift();
-      return NextResponse.json({ status: 'success', output: logs.join('') });
+      const outputText = await executeLinuxCommand(hostname || 'localhost', command || '');
+      const logs = terminalLogs.get(hostname || 'localhost') || [];
+      return NextResponse.json({
+        status: 'success',
+        output: outputText,
+        fullLogs: logs.join('')
+      });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

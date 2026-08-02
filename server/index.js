@@ -33,8 +33,120 @@ const io = new Server(server, {
 const connectedAgents = new Map();
 const metricsHistory = new Map();
 
-// HTTP endpoint for agent metrics HTTP fallback / simple agent pushes
-app.post('/api/agent/metrics', (req, res) => {
+const { exec } = require('child_process');
+const os = require('os');
+const fs = require('fs');
+
+const terminalLogs = new Map();
+const terminalCwds = new Map();
+
+function executeLinuxCommand(hostname, command) {
+  return new Promise((resolve) => {
+    const targetHost = hostname || 'localhost';
+    const cleanCmd = (command || '').trim();
+
+    if (!terminalCwds.has(targetHost)) {
+      terminalCwds.set(targetHost, process.env.HOME || process.cwd());
+    }
+
+    if (cleanCmd === "clear") {
+      terminalLogs.set(targetHost, []);
+      return resolve({ output: '', fullLogs: '' });
+    }
+
+    let currentCwd = terminalCwds.get(targetHost);
+    if (!fs.existsSync(currentCwd)) {
+      currentCwd = process.env.HOME || process.cwd();
+      terminalCwds.set(targetHost, currentCwd);
+    }
+
+    const username = os.userInfo().username || 'root';
+    const homeDir = process.env.HOME || `/home/${username}`;
+    const displayCwd = currentCwd.startsWith(homeDir)
+      ? currentCwd.replace(homeDir, '~')
+      : currentCwd;
+
+    const isSudo = cleanCmd.startsWith('sudo ');
+    const promptSymbol = isSudo ? '#' : '$';
+    const displayUser = isSudo ? 'root' : username;
+    const promptLine = `${displayUser}@${targetHost}:${displayCwd}${promptSymbol} ${cleanCmd}\n`;
+
+    let execCmd = cleanCmd;
+    const isCd = cleanCmd === "cd" || cleanCmd.startsWith("cd ") || cleanCmd.startsWith("cd;");
+
+    if (isCd) {
+      execCmd = `${cleanCmd} && pwd`;
+    }
+
+    exec(
+      execCmd,
+      {
+        cwd: currentCwd,
+        shell: '/bin/bash',
+        maxBuffer: 1024 * 1024 * 10,
+        env: { ...process.env, TERM: 'xterm-256color' },
+        timeout: 30000
+      },
+      (error, stdout, stderr) => {
+        let outputText = promptLine;
+
+        if (isCd) {
+          if (stdout && stdout.trim()) {
+            const lines = stdout.trim().split('\n');
+            const possibleNewCwd = lines[lines.length - 1].trim();
+            if (fs.existsSync(possibleNewCwd)) {
+              try {
+                if (fs.statSync(possibleNewCwd).isDirectory()) {
+                  terminalCwds.set(targetHost, possibleNewCwd);
+                }
+              } catch (e) {}
+            }
+            const outputLines = lines.slice(0, -1);
+            if (outputLines.length > 0) {
+              outputText += outputLines.join('\n') + '\n';
+            }
+          }
+          if (stderr) {
+            outputText += stderr;
+            if (!stderr.endsWith('\n')) outputText += '\n';
+          }
+          if (error && !stderr) {
+            outputText += `${error.message}\n`;
+          }
+        } else {
+          if (stdout) {
+            outputText += stdout;
+            if (!stdout.endsWith('\n')) outputText += '\n';
+          }
+          if (stderr) {
+            outputText += stderr;
+            if (!stderr.endsWith('\n')) outputText += '\n';
+          }
+          if (error && !stdout && !stderr) {
+            outputText += `${error.message}\n`;
+          }
+        }
+
+        if (!terminalLogs.has(targetHost)) terminalLogs.set(targetHost, []);
+        const logs = terminalLogs.get(targetHost);
+        logs.push(outputText);
+        if (logs.length > 100) logs.shift();
+
+        resolve({ output: outputText, fullLogs: logs.join('') });
+      }
+    );
+  });
+}
+
+// HTTP endpoint for agent metrics HTTP fallback / simple agent pushes & dashboard actions
+app.post('/api/agent/metrics', async (req, res) => {
+  const body = req.body;
+
+  if (body && body.action === 'exec_terminal') {
+    const result = await executeLinuxCommand(body.hostname, body.command);
+    return res.json({ status: 'success', output: result.output, fullLogs: result.fullLogs });
+  }
+
   const token = req.headers.authorization?.replace('Bearer ', '');
   const metrics = req.body;
 

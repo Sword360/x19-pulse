@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -49,6 +49,15 @@ export default function Dashboard() {
   // Terminal State
   const [terminalInput, setTerminalInput] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("$ PulseOps Web Shell Initialized.\n$ Type commands below (e.g. ps, uptime, ls, whoami)\n");
+  const [cmdHistory, setCmdHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const terminalEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (activeTab === "terminal" && terminalEndRef.current) {
+      terminalEndRef.current.scrollTop = terminalEndRef.current.scrollHeight;
+    }
+  }, [terminalOutput, activeTab]);
 
   // Process Search & Server Search State
   const [processSearch, setProcessSearch] = useState("");
@@ -246,6 +255,24 @@ export default function Dashboard() {
 
     const cmd = terminalInput;
     setTerminalInput("");
+    setCmdHistory((prev) => [cmd, ...prev]);
+    setHistoryIndex(-1);
+
+    if (cmd.trim() === "clear") {
+      setTerminalOutput("");
+      try {
+        await fetch(`${API_URL}/api/agent/metrics`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "exec_terminal",
+            hostname: activeServerData.hostname,
+            command: "clear"
+          })
+        });
+      } catch (e) {}
+      return;
+    }
 
     try {
       const res = await fetch(`${API_URL}/api/agent/metrics`, {
@@ -259,10 +286,35 @@ export default function Dashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        setTerminalOutput((prev) => prev + data.output);
+        setTerminalOutput((prev) => prev + (data.output || ""));
+      } else {
+        setTerminalOutput((prev) => prev + `$ ${cmd}\nError: Server returned HTTP ${res.status}\n`);
       }
     } catch (e) {
-      setTerminalOutput((prev) => prev + `$ ${cmd}\nCommand executed.\n`);
+      setTerminalOutput((prev) => prev + `$ ${cmd}\nExecution failed (Connection Error).\n`);
+    }
+  };
+
+  const handleTerminalKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (cmdHistory.length === 0) return;
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const nextIndex = historyIndex + 1;
+      if (nextIndex < cmdHistory.length) {
+        setHistoryIndex(nextIndex);
+        setTerminalInput(cmdHistory[nextIndex]);
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const prevIndex = historyIndex - 1;
+      if (prevIndex >= 0) {
+        setHistoryIndex(prevIndex);
+        setTerminalInput(cmdHistory[prevIndex]);
+      } else {
+        setHistoryIndex(-1);
+        setTerminalInput("");
+      }
     }
   };
 
@@ -668,17 +720,23 @@ export default function Dashboard() {
           {/* TAB 4: WEB TERMINAL */}
           {activeTab === "terminal" && (
             <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center flex-wrap gap-2">
                 <div>
-                  <h3 className="text-base font-bold text-white">Interactive Web Terminal (PTY)</h3>
-                  <p className="text-xs text-slate-400">Execute commands directly on host shell</p>
+                  <h3 className="text-base font-bold text-white">Interactive Web Terminal (PTY / Bash)</h3>
+                  <p className="text-xs text-slate-400">Execute Linux commands directly on host shell (Use ↑/↓ for history)</p>
                 </div>
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-mono">
-                  Bash Shell Connected
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-mono flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Bash Shell Connected
+                  </span>
+                </div>
               </div>
 
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-emerald-400 h-80 overflow-y-auto whitespace-pre-wrap">
+              <div
+                ref={terminalEndRef}
+                className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-emerald-400 h-96 overflow-y-auto whitespace-pre-wrap select-text shadow-inner"
+              >
                 {terminalOutput}
               </div>
 
@@ -688,12 +746,13 @@ export default function Dashboard() {
                     type="text"
                     value={terminalInput}
                     onChange={(e) => setTerminalInput(e.target.value)}
-                    placeholder="Enter command (e.g., uptime, ps, whoami)..."
-                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                    onKeyDown={handleTerminalKeyDown}
+                    placeholder="Enter any Linux command (e.g. ls -la, pwd, cat, sudo, uptime, docker ps, clear)..."
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500 transition"
                   />
                   <button
                     type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-lg shadow-indigo-600/20"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>Run</span>
