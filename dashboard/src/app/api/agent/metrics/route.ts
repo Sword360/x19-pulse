@@ -133,9 +133,9 @@ export async function POST(request: Request) {
     if (body.hostname && body.cpu_usage !== undefined) {
       const agentId = body.hostname;
 
-      // Ignore telemetry from server nodes that have been removed by an Admin
+      // Auto-restore server node if it was previously removed and is now sending fresh metrics
       if (removedServers.has(agentId)) {
-        return NextResponse.json({ status: 'ignored', message: 'Server node removed from database' });
+        removedServers.delete(agentId);
       }
       const existing = serverStore.get(agentId);
       const serverData = {
