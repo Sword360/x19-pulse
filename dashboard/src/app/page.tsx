@@ -1106,7 +1106,7 @@ export default function Dashboard() {
       </div>
 
       <UserManagementModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} />
-      <AddServerModal isOpen={isAddServerModalOpen} onClose={() => setIsAddServerModalOpen(false)} />
+      <AddServerModal isOpen={isAddServerModalOpen} onClose={() => setIsAddServerModalOpen(false)} onServerAdded={fetchServers} />
     </div>
   );
 }

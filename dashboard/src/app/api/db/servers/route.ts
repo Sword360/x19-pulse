@@ -46,14 +46,39 @@ export async function DELETE(request: Request) {
   }
 }
 
-// POST: Unblacklist a server node if re-added
+// POST: Add or unblacklist a server node in database
 export async function POST(request: Request) {
   try {
-    const { hostname } = await request.json();
-    if (hostname && globalThis._removedServers) {
-      globalThis._removedServers.delete(hostname);
+    const { hostname, ipAddress } = await request.json();
+    if (!hostname) {
+      return NextResponse.json({ error: 'Hostname is required' }, { status: 400 });
     }
-    return NextResponse.json({ status: 'success' });
+
+    const serverStore = globalThis._serverStore || new Map();
+    const removedServers = globalThis._removedServers || new Set();
+
+    if (removedServers) {
+      removedServers.delete(hostname);
+    }
+
+    const serverData = {
+      hostname: hostname,
+      ipAddress: ipAddress || '127.0.0.1',
+      status: 'ONLINE',
+      lastSeen: new Date().toISOString(),
+      cpu: 0,
+      memory: 0,
+      disk: 0,
+      load: [0, 0, 0],
+      uptime: 0,
+      processes: [],
+      logs: [],
+      vnc_active: true
+    };
+
+    serverStore.set(hostname, serverData);
+
+    return NextResponse.json({ status: 'success', server: serverData });
   } catch (e) {
     return NextResponse.json({ error: 'Failed to update server' }, { status: 500 });
   }
