@@ -43,25 +43,25 @@ print_progress 10 "Initializing PulseOps system directories..."
 mkdir -p /tmp/pulseops /etc/pulseops /opt/pulseops 2>/dev/null || sudo mkdir -p /etc/pulseops /opt/pulseops 2>/dev/null || true
 echo -e "${GREEN}[✓] System directories created successfully.${NC}"
 
-# Step 2: Check & Install Lightweight TigerVNC / Xvnc & websockify (35%)
-print_progress 35 "Checking TigerVNC and websockify for noVNC Remote GUI..."
-if ! command -v Xvnc >/dev/null 2>&1 && ! command -v vncserver >/dev/null 2>&1 || ! command -v websockify >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
-  echo -e "${BLUE}[PulseOps] Installing lightweight TigerVNC server, xterm, websockify & python3 dependencies...${NC}"
+# Step 2: Check & Install x11vnc & websockify (35%)
+print_progress 35 "Checking x11vnc and websockify for noVNC Remote GUI..."
+if ! command -v x11vnc >/dev/null 2>&1 || ! command -v websockify >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+  echo -e "${BLUE}[PulseOps] Installing x11vnc, websockify & python3 dependencies...${NC}"
   if command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-pip tigervnc-standalone-server tigervnc-common websockify novnc xterm twm x11-xserver-utils || true
+    sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-pip x11vnc websockify novnc x11-xserver-utils || true
   elif command -v dnf >/dev/null 2>&1; then
     sudo dnf install -y epel-release 2>/dev/null || true
-    sudo dnf install -y python3 python3-pip tigervnc-server websockify novnc xterm twm xorg-x11-server-utils || true
+    sudo dnf install -y python3 python3-pip x11vnc websockify novnc xorg-x11-server-utils || true
   elif command -v yum >/dev/null 2>&1; then
     sudo yum install -y epel-release 2>/dev/null || true
-    sudo yum install -y python3 python3-pip tigervnc-server websockify novnc xterm twm xorg-x11-server-utils || true
+    sudo yum install -y python3 python3-pip x11vnc websockify novnc xorg-x11-server-utils || true
   fi
 
   if ! command -v websockify >/dev/null 2>&1; then
     sudo python3 -m pip install websockify 2>/dev/null || pip3 install websockify 2>/dev/null || true
   fi
 fi
-echo -e "${GREEN}[✓] Lightweight Remote GUI & Python dependencies verified.${NC}"
+echo -e "${GREEN}[✓] x11vnc & Python dependencies verified.${NC}"
 
 # Step 3: Write Agent Configuration & Token (60%)
 print_progress 60 "Generating agent security configuration..."
@@ -92,17 +92,43 @@ fi
 echo -e "${GREEN}[✓] Telemetry script installed to /opt/pulseops/agent.py.${NC}"
 
 # Step 5: Configure & Launch Background Systemd Services (100%)
-print_progress 95 "Starting background telemetry daemon & noVNC service..."
+print_progress 95 "Starting background x11vnc daemon & noVNC service..."
 
-# Create VNC launcher script to handle standalone Xvnc virtual display and websockify proxy
+# 5a. Create x11vnc launcher script with dynamic password detection
+cat <<'EOF' | sudo tee /opt/pulseops/x11vnc-start.sh > /dev/null
+#!/bin/bash
+export DISPLAY=:0
+XAUTH="/run/user/1000/gdm/Xauthority"
+PASS_FILE="/etc/x11vnc.pass"
+
+# Wait for Xauthority file or fallback
+while [ ! -f "$XAUTH" ] && [ ! -f "$HOME/.Xauthority" ]; do
+    sleep 2
+done
+
+if [ -f "$XAUTH" ]; then
+    AUTH_FLAGS="-auth $XAUTH"
+elif [ -f "$HOME/.Xauthority" ]; then
+    AUTH_FLAGS="-auth $HOME/.Xauthority"
+else
+    AUTH_FLAGS="-auth guess"
+fi
+
+if [ -s "$PASS_FILE" ]; then
+    AUTH_MODE="-rfbauth $PASS_FILE"
+else
+    AUTH_MODE="-nopw"
+fi
+
+exec /usr/bin/x11vnc -display :0 $AUTH_FLAGS -rfbport 5900 -forever -shared -wait 10 $AUTH_MODE
+EOF
+
+sudo chmod +x /opt/pulseops/x11vnc-start.sh 2>/dev/null || chmod +x /opt/pulseops/x11vnc-start.sh 2>/dev/null || true
+
+# 5b. Create noVNC websockify proxy launcher script
 cat <<'EOF' | sudo tee /opt/pulseops/vnc-start.sh > /dev/null
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
-
-# Clean up stale websockify or Xvnc processes & locks
-pkill -9 -f "websockify|Xvnc|vncserver|tightvncserver" 2>/dev/null || true
-rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true
-sleep 1
 
 # Locate websockify binary dynamically
 WEBSOCKIFY_BIN=""
@@ -114,41 +140,6 @@ elif [ -f "/usr/bin/websockify" ]; then
   WEBSOCKIFY_BIN="/usr/bin/websockify"
 elif python3 -c "import websockify" >/dev/null 2>&1; then
   WEBSOCKIFY_BIN="python3 -m websockify"
-fi
-
-# Launch standalone lightweight TigerVNC / Xvnc server on virtual display :99 (port 5900)
-if command -v Xvnc >/dev/null 2>&1; then
-  Xvnc :99 -geometry 1280x720 -depth 24 -rfbport 5900 -SecurityTypes None -AlwaysShared=1 >/dev/null 2>&1 &
-elif command -v vncserver >/dev/null 2>&1; then
-  vncserver :99 -geometry 1280x720 -depth 24 -rfbport 5900 -SecurityTypes None >/dev/null 2>&1 &
-elif [ -f "/usr/bin/Xvnc" ]; then
-  /usr/bin/Xvnc :99 -geometry 1280x720 -depth 24 -rfbport 5900 -SecurityTypes None -AlwaysShared=1 >/dev/null 2>&1 &
-fi
-sleep 1
-
-# Launch desktop shell / window manager / terminal inside display :99
-export DISPLAY=:99
-
-if command -v xsetroot >/dev/null 2>&1; then
-  xsetroot -solid "#1e1e2e" >/dev/null 2>&1 || true
-fi
-
-# Launch window manager if installed
-if command -v fluxbox >/dev/null 2>&1; then
-  fluxbox >/dev/null 2>&1 &
-elif command -v openbox >/dev/null 2>&1; then
-  openbox >/dev/null 2>&1 &
-elif command -v twm >/dev/null 2>&1; then
-  twm >/dev/null 2>&1 &
-fi
-
-# Launch an interactive terminal window
-if command -v xterm >/dev/null 2>&1; then
-  xterm -geometry 110x34+40+40 -bg "#0f172a" -fg "#38bdf8" -title "PulseOps Remote Terminal (:99)" -e "bash -l" >/dev/null 2>&1 &
-elif command -v xfce4-terminal >/dev/null 2>&1; then
-  xfce4-terminal --geometry=110x34+40+40 >/dev/null 2>&1 &
-elif command -v gnome-terminal >/dev/null 2>&1; then
-  gnome-terminal --geometry=110x34+40+40 >/dev/null 2>&1 &
 fi
 
 # Discover valid noVNC HTML directory
@@ -165,9 +156,16 @@ if [ -n "$NOVNC_DIR" ] && [ -d "$NOVNC_DIR" ]; then
   WEB_FLAG="--web=$NOVNC_DIR"
 fi
 
+# Ensure x11vnc is running
+if ! pgrep -x "x11vnc" >/dev/null 2>&1; then
+  if [ -f /opt/pulseops/x11vnc-start.sh ]; then
+    /opt/pulseops/x11vnc-start.sh >/dev/null 2>&1 &
+  fi
+fi
+
 # Launch Websockify in foreground (kept alive by systemd)
 if [ -n "$WEBSOCKIFY_BIN" ]; then
-  exec $WEBSOCKIFY_BIN $WEB_FLAG 6080 localhost:5900
+  exec $WEBSOCKIFY_BIN $WEB_FLAG 6080 127.0.0.1:5900
 else
   echo "Websockify binary not found, keeping daemon alive..."
   exec tail -f /dev/null
@@ -178,8 +176,8 @@ sudo chmod +x /opt/pulseops/vnc-start.sh 2>/dev/null || chmod +x /opt/pulseops/v
 
 cat <<EOF | sudo tee /etc/systemd/system/pulseops-vnc.service > /dev/null
 [Unit]
-Description=PulseOps Lightweight TigerVNC Remote Display Service
-After=network.target
+Description=PulseOps x11vnc Remote Display & noVNC Proxy Service
+After=network.target display-manager.service
 
 [Service]
 Type=simple
