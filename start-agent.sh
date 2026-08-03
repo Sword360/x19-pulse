@@ -1,7 +1,7 @@
 #!/bin/bash
 # PulseOps WSL Agent & Gateway Launcher
 
-SERVER_URL="${PULSEOPS_SERVER:-http://localhost:3001}"
+SERVER_URL="${PULSEOPS_SERVER:-http://localhost:3000}"
 TOKEN="${PULSEOPS_TOKEN:-wsl-default-token}"
 
 echo "================================================="

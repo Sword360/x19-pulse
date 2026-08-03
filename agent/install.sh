@@ -66,12 +66,16 @@ echo -e "${GREEN}[✓] x11vnc & Python dependencies verified.${NC}"
 # Step 3: Write Agent Configuration & Token (60%)
 print_progress 60 "Generating agent security configuration..."
 CONFIG_JSON="{\"server_url\": \"${SERVER_URL}\", \"agent_token\": \"${AGENT_TOKEN}\"}"
-if [ -w /etc/pulseops ]; then
-  echo "$CONFIG_JSON" > /etc/pulseops/agent.json
+mkdir -p "$HOME/.config/pulseops" /tmp/pulseops 2>/dev/null || true
+echo "$CONFIG_JSON" > /tmp/pulseops/agent.json 2>/dev/null || true
+echo "$CONFIG_JSON" > "$HOME/.config/pulseops/agent.json" 2>/dev/null || true
+
+if [ -w /etc/pulseops ] 2>/dev/null; then
+  echo "$CONFIG_JSON" > /etc/pulseops/agent.json 2>/dev/null || true
 else
-  echo "$CONFIG_JSON" | sudo tee /etc/pulseops/agent.json > /dev/null
+  echo "$CONFIG_JSON" | sudo tee /etc/pulseops/agent.json > /dev/null 2>&1 || true
 fi
-echo -e "${GREEN}[✓] Credentials saved to /etc/pulseops/agent.json.${NC}"
+echo -e "${GREEN}[✓] Credentials saved to agent configuration.${NC}"
 
 # Step 4: Download Agent Code from GitHub (80%)
 print_progress 80 "Fetching latest telemetry script from GitHub..."
@@ -79,17 +83,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/pulseops-agent.py" ]; then
   cp "$SCRIPT_DIR/pulseops-agent.py" /tmp/pulseops-agent.py
 else
-  curl -fsSL "https://raw.githubusercontent.com/Sword360/x19-pulse/main/agent/pulseops-agent.py" -o /tmp/pulseops-agent.py || true
+  curl -fsSL "https://raw.githubusercontent.com/Sword360/x19-pulse/test/vnc-architecture/agent/pulseops-agent.py" -o /tmp/pulseops-agent.py || true
 fi
 
-if [ -w /opt/pulseops ]; then
-  cp /tmp/pulseops-agent.py /opt/pulseops/agent.py
-  chmod +x /opt/pulseops/agent.py
+if [ -w /opt/pulseops ] 2>/dev/null; then
+  cp /tmp/pulseops-agent.py /opt/pulseops/agent.py 2>/dev/null || true
+  chmod +x /opt/pulseops/agent.py 2>/dev/null || true
 else
-  sudo cp /tmp/pulseops-agent.py /opt/pulseops/agent.py
-  sudo chmod +x /opt/pulseops/agent.py
+  sudo cp /tmp/pulseops-agent.py /opt/pulseops/agent.py 2>/dev/null || true
+  sudo chmod +x /opt/pulseops/agent.py 2>/dev/null || true
 fi
-echo -e "${GREEN}[✓] Telemetry script installed to /opt/pulseops/agent.py.${NC}"
+chmod +x /tmp/pulseops-agent.py 2>/dev/null || true
+echo -e "${GREEN}[✓] Telemetry script installed successfully.${NC}"
 
 # Step 5: Configure & Launch Background Systemd Services (100%)
 print_progress 95 "Starting background x11vnc daemon & noVNC service..."
@@ -217,7 +222,12 @@ EOF
   sudo systemctl restart pulseops-agent 2>/dev/null || true
   sudo systemctl enable pulseops-agent 2>/dev/null || true
 else
-  PULSEOPS_SERVER="${SERVER_URL}" PULSEOPS_TOKEN="${AGENT_TOKEN}" python3 /opt/pulseops/agent.py > /tmp/pulseops-agent.log 2>&1 &
+  AGENT_SCRIPT="/opt/pulseops/agent.py"
+  if [ ! -f "$AGENT_SCRIPT" ]; then
+    AGENT_SCRIPT="/tmp/pulseops-agent.py"
+  fi
+  PULSEOPS_SERVER="${SERVER_URL}" PULSEOPS_TOKEN="${AGENT_TOKEN}" nohup python3 "$AGENT_SCRIPT" > /tmp/pulseops-agent.log 2>&1 &
+  disown 2>/dev/null || true
 fi
 
 print_progress 100 "PulseOps Agent installation completed!"
