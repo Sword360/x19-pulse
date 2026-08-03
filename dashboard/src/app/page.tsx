@@ -78,6 +78,7 @@ export default function Dashboard() {
   const [vncScaleMode, setVncScaleMode] = useState<"scale" | "off">("scale");
   const [vncActionLoading, setVncActionLoading] = useState(false);
   const [customVncHost, setCustomVncHost] = useState<string>("");
+  const [vncPassword, setVncPassword] = useState<string>("");
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -986,6 +987,19 @@ export default function Dashboard() {
                             <span className="text-slate-400 font-semibold">:6080</span>
                           </div>
 
+                          <div className="flex items-center space-x-1.5 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800 font-mono text-[11px]">
+                            <Lock className="w-3 h-3 text-amber-400" />
+                            <span className="text-slate-400 font-semibold">Password:</span>
+                            <input
+                              type="password"
+                              value={vncPassword}
+                              placeholder="Optional VNC Pass..."
+                              onChange={(e) => setVncPassword(e.target.value)}
+                              className="bg-slate-900 border border-slate-700/80 rounded px-2 py-0.5 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500 w-32"
+                              title="Optional: Enter VNC password to auto-login to password-protected x11vnc"
+                            />
+                          </div>
+
                           <span className="hidden sm:flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                             <ShieldCheck className="w-3 h-3" />
                             <span>256-bit Encrypted Session</span>
@@ -1042,7 +1056,7 @@ export default function Dashboard() {
                         {activeServerData.vnc_active === true ? (
                           <iframe
                             id="vncFrame"
-                            src={`http://${effectiveVncHost}:6080/vnc.html?host=${effectiveVncHost}&port=6080&autoconnect=true&resize=${vncScaleMode}`}
+                            src={`http://${effectiveVncHost}:6080/vnc.html?host=${effectiveVncHost}&port=6080&autoconnect=true&resize=${vncScaleMode}${vncPassword ? `&password=${encodeURIComponent(vncPassword)}` : ''}`}
                             className="w-full h-full border-0 bg-slate-950 min-h-[460px]"
                             title="TigerVNC Desktop Display Stream"
                           />
