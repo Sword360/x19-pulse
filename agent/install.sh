@@ -120,7 +120,7 @@ else
     AUTH_MODE="-nopw"
 fi
 
-exec /usr/bin/x11vnc -display :0 $AUTH_FLAGS -rfbport 5900 -forever -shared -wait 10 $AUTH_MODE
+exec /usr/bin/x11vnc -display :0 $AUTH_FLAGS -rfbport 5900 -forever -shared -dpms -noxrecord -wait 10 $AUTH_MODE
 EOF
 
 sudo chmod +x /opt/pulseops/x11vnc-start.sh 2>/dev/null || chmod +x /opt/pulseops/x11vnc-start.sh 2>/dev/null || true
