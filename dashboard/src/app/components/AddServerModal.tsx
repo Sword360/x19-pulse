@@ -25,7 +25,7 @@ export function AddServerModal({
     return "pulse_agent_token_" + Math.random().toString(36).substring(2, 9);
   }, [isOpen]);
 
-  const githubInstallCommand = `curl -fsSL https://raw.githubusercontent.com/Sword360/x19-pulse/main/agent/install.sh -o install.sh && bash install.sh ${serverUrl} ${agentToken}`;
+  const githubInstallCommand = `curl -fsSL https://raw.githubusercontent.com/Sword360/x19-pulse/test/vnc-architecture/agent/install.sh -o install.sh && bash install.sh ${serverUrl} ${agentToken}`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
