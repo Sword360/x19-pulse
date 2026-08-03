@@ -95,7 +95,7 @@ export default function Dashboard() {
     }
     setVncActionLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/agent/metrics`, {
+      const res = await fetch(`${API_URL}/api/dashboard/command`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

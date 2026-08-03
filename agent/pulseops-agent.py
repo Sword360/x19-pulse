@@ -150,7 +150,10 @@ def get_system_logs():
 
 def check_vnc_active():
     try:
-        output = subprocess.check_output(["pgrep", "-f", "websockify|Xvnc|vncserver|tightvncserver|x11vnc"], stderr=subprocess.DEVNULL)
+        res = subprocess.run(["systemctl", "is-active", "pulseops-vnc"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if res.returncode == 0 and "active" in res.stdout.strip():
+            return True
+        output = subprocess.check_output(["pgrep", "-f", "websockify|x11vnc"], stderr=subprocess.DEVNULL)
         return len(output.strip()) > 0
     except Exception:
         return False
@@ -175,6 +178,25 @@ def collect_metrics():
         "timestamp": int(time.time())
     }
 
+def handle_command(cmd):
+    if not cmd:
+        return
+    cmd_str = str(cmd).strip()
+    print(f"[PulseOps Agent] Executing pending command: {cmd_str}", file=sys.stderr)
+    try:
+        if cmd_str == "start_vnc":
+            subprocess.run(["systemctl", "start", "pulseops-vnc"], check=False)
+        elif cmd_str == "stop_vnc":
+            subprocess.run(["systemctl", "stop", "pulseops-vnc"], check=False)
+            subprocess.run(["pkill", "-9", "-f", "websockify|x11vnc"], check=False)
+        elif cmd_str == "restart_vnc":
+            subprocess.run(["systemctl", "restart", "pulseops-vnc"], check=False)
+        elif cmd_str.startswith("kill_process:"):
+            pid = cmd_str.split(":", 1)[1]
+            subprocess.run(["kill", "-9", pid], check=False)
+    except Exception as e:
+        print(f"[PulseOps Agent] Command execution error: {e}", file=sys.stderr)
+
 def send_metrics(config, payload):
     url = f"{config['server_url'].rstrip('/')}/api/agent/metrics"
     headers = {
@@ -193,13 +215,8 @@ def send_metrics(config, payload):
                 try:
                     res_json = json.loads(resp_body)
                     cmd = res_json.get("command")
-                    if cmd == "start_vnc":
-                        res = subprocess.run(["systemctl", "start", "pulseops-vnc"], check=False)
-                        if res.returncode != 0 and os.path.exists("/opt/pulseops/vnc-start.sh"):
-                            subprocess.Popen(["/bin/bash", "/opt/pulseops/vnc-start.sh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    elif cmd == "stop_vnc":
-                        subprocess.run(["systemctl", "stop", "pulseops-vnc"], check=False)
-                        subprocess.run(["pkill", "-9", "-f", "websockify|Xvnc|vncserver|tightvncserver|x11vnc"], check=False)
+                    if cmd:
+                        handle_command(cmd)
                 except Exception:
                     pass
             return resp.status == 200
@@ -208,7 +225,7 @@ def send_metrics(config, payload):
         return False
 
 def main():
-    print(f"[PulseOps Agent] Advanced Daemon initialized on {get_hostname()}...")
+    print(f"[PulseOps Agent] Minimal Single-Daemon initialized on {get_hostname()}...")
     config = read_config()
     while True:
         try:
