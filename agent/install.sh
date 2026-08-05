@@ -75,6 +75,12 @@ if [ -w /etc/pulseops ] 2>/dev/null; then
 else
   echo "$CONFIG_JSON" | sudo tee /etc/pulseops/agent.json > /dev/null 2>&1 || true
 fi
+
+# Register & un-blacklist node on dashboard
+curl -s -X POST "${SERVER_URL}/api/db/servers" \
+  -H "Content-Type: application/json" \
+  -d "{\"hostname\": \"$(hostname)\", \"ipAddress\": \"127.0.0.1\"}" >/dev/null 2>&1 || true
+
 echo -e "${GREEN}[✓] Credentials saved to agent configuration.${NC}"
 
 # Step 4: Download Agent Code from GitHub (80%)
