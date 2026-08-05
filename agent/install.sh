@@ -76,12 +76,19 @@ else
   echo "$CONFIG_JSON" | sudo tee /etc/pulseops/agent.json > /dev/null 2>&1 || true
 fi
 
-# Register & un-blacklist node on dashboard
+if command -v x11vnc >/dev/null 2>&1; then
+  sudo x11vnc -storepasswd "Sword@09" /etc/x11vnc.pass 2>/dev/null || x11vnc -storepasswd "Sword@09" /etc/x11vnc.pass 2>/dev/null || echo "Sword@09" | sudo tee /etc/x11vnc.pass >/dev/null 2>&1 || true
+fi
+
+# Register & un-blacklist node on dashboard with detected host IP
+HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [ -z "$HOST_IP" ]; then HOST_IP="127.0.0.1"; fi
+
 curl -s -X POST "${SERVER_URL}/api/db/servers" \
   -H "Content-Type: application/json" \
-  -d "{\"hostname\": \"$(hostname)\", \"ipAddress\": \"127.0.0.1\"}" >/dev/null 2>&1 || true
+  -d "{\"hostname\": \"$(hostname)\", \"ipAddress\": \"${HOST_IP}\"}" >/dev/null 2>&1 || true
 
-echo -e "${GREEN}[✓] Credentials saved to agent configuration.${NC}"
+echo -e "${GREEN}[✓] Credentials & VNC authentication (Sword@09) configured.${NC}"
 
 # Step 4: Download Agent Code from GitHub (80%)
 print_progress 80 "Fetching latest telemetry script from GitHub..."

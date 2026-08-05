@@ -79,7 +79,7 @@ export default function Dashboard() {
   const [vncScaleMode, setVncScaleMode] = useState<"scale" | "off">("scale");
   const [vncActionLoading, setVncActionLoading] = useState(false);
   const [customVncHost, setCustomVncHost] = useState<string>("");
-  const [vncPassword, setVncPassword] = useState<string>("");
+  const [vncPassword, setVncPassword] = useState<string>("Sword@09");
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -89,7 +89,7 @@ export default function Dashboard() {
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
-  const handleVncControl = async (action: "start_vnc" | "stop_vnc") => {
+  const handleVncControl = async (action: "start_vnc" | "stop_vnc", targetHostOverride?: string) => {
     if (currentUser?.role !== "ADMIN") {
       alert("VNC Service control is restricted to Admin accounts.");
       return;
@@ -108,6 +108,14 @@ export default function Dashboard() {
         const data = await res.json();
         setActionMessage(`[REALVNC ENGINE]: ${data.message || `VNC service ${action === "start_vnc" ? "started" : "stopped"}`}`);
         fetchServers();
+
+        if (action === "start_vnc") {
+          const hostToUse = targetHostOverride || customVncHost.trim() || activeServerData.ipAddress || activeServerData.hostname || (typeof window !== 'undefined' ? window.location.hostname : 'localhost');
+          const passToUse = vncPassword || "Sword@09";
+          const vncUrl = `http://${hostToUse}:6080/vnc.html?host=${hostToUse}&port=6080&autoconnect=true&resize=scale&password=${encodeURIComponent(passToUse)}`;
+          window.open(vncUrl, '_blank', 'noopener,noreferrer');
+        }
+
         setTimeout(() => setActionMessage(null), 4000);
       }
     } catch (e) {
@@ -918,14 +926,13 @@ export default function Dashboard() {
                   {currentUser.role === "ADMIN" && (
                     <div className="flex items-center space-x-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
                       <button
-                        onClick={() => handleVncControl("start_vnc")}
-                        disabled={vncActionLoading || activeServerData.vnc_active === true}
-                        className={`flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition ${
-                          activeServerData.vnc_active === true
-                            ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                            : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20"
-                        }`}
-                        title="Start VNC Daemon on Remote Host"
+                        onClick={() => {
+                          const hostToUse = customVncHost.trim() || activeServerData.ipAddress || activeServerData.hostname || (typeof window !== 'undefined' ? window.location.hostname : 'localhost');
+                          handleVncControl("start_vnc", hostToUse);
+                        }}
+                        disabled={vncActionLoading}
+                        className="flex items-center space-x-1.5 text-xs px-3.5 py-1.5 rounded-lg font-semibold transition bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20"
+                        title="Start VNC Daemon and launch viewer in a new window"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
                         <span>Start VNC</span>
@@ -933,12 +940,8 @@ export default function Dashboard() {
 
                       <button
                         onClick={() => handleVncControl("stop_vnc")}
-                        disabled={vncActionLoading || activeServerData.vnc_active !== true}
-                        className={`flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition ${
-                          activeServerData.vnc_active !== true
-                            ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                            : "bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20"
-                        }`}
+                        disabled={vncActionLoading}
+                        className="flex items-center space-x-1.5 text-xs px-3.5 py-1.5 rounded-lg font-semibold transition bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20"
                         title="Stop VNC Daemon on Remote Host"
                       >
                         <Square className="w-3.5 h-3.5 fill-current" />
@@ -958,7 +961,7 @@ export default function Dashboard() {
               >
                 {/* RealVNC Viewer Toolbar */}
                 {(() => {
-                  const effectiveVncHost = customVncHost.trim() || (
+                  const effectiveVncHost = customVncHost.trim() || activeServerData.ipAddress || (
                     typeof window !== 'undefined'
                       ? (activeServerData.hostname && activeServerData.hostname !== 'localhost' && !activeServerData.hostname.includes('linux-host')
                           ? activeServerData.hostname

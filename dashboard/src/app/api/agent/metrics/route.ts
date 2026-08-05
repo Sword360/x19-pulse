@@ -140,6 +140,7 @@ export async function POST(request: Request) {
       const existing = serverStore.get(agentId);
       const serverData = {
         hostname: body.hostname,
+        ipAddress: body.ip_address || existing?.ipAddress || '127.0.0.1',
         status: 'ONLINE',
         lastSeen: new Date().toISOString(),
         cpu: body.cpu_usage || 0,

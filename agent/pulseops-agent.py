@@ -55,6 +55,20 @@ def read_config():
 def get_hostname():
     return socket.gethostname()
 
+def get_ip_address():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.5)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "127.0.0.1"
+
 def get_uptime():
     try:
         with open("/proc/uptime", "r") as f:
@@ -199,6 +213,7 @@ def collect_metrics():
     
     return {
         "hostname": get_hostname(),
+        "ip_address": get_ip_address(),
         "uptime": get_uptime(),
         "cpu_usage": get_cpu_usage(),
         "memory": mem,
