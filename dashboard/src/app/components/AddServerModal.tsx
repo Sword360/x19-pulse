@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { X, Server, Copy, Check, Terminal, ShieldCheck, Zap, PlusCircle } from "lucide-react";
 
 export function AddServerModal({ 
@@ -17,15 +17,23 @@ export function AddServerModal({
   const [manualIp, setManualIp] = useState("");
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [customServerUrl, setCustomServerUrl] = useState("");
 
-  const serverUrl = typeof window !== "undefined" ? window.location.origin : "https://x19-pulse.vercel.app";
-  
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setCustomServerUrl(window.location.origin);
+    }
+  }, [isOpen]);
+
+  const activeServerUrl = customServerUrl.trim() || (typeof window !== "undefined" ? window.location.origin : "https://x19-pulse.vercel.app");
+  const isLocalhostUrl = activeServerUrl.includes("localhost") || activeServerUrl.includes("127.0.0.1");
+
   // Stable agent token that only generates once when modal opens
   const agentToken = useMemo(() => {
     return "pulse_agent_token_" + Math.random().toString(36).substring(2, 9);
   }, [isOpen]);
 
-  const githubInstallCommand = `curl -fsSL https://raw.githubusercontent.com/Sword360/x19-pulse/test/vnc-architecture/agent/install.sh -o install.sh && bash install.sh ${serverUrl} ${agentToken}`;
+  const githubInstallCommand = `curl -fsSL https://cdn.jsdelivr.net/gh/Sword360/x19-pulse@main/agent/install.sh -o install.sh && sudo bash install.sh ${activeServerUrl} ${agentToken}`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -157,6 +165,26 @@ export function AddServerModal({
               <span>{copied ? "Copied Command!" : "Copy Command"}</span>
             </button>
           </div>
+
+          <div>
+            <label className="block text-[11px] font-medium text-slate-300 mb-1">Target Dashboard Server URL</label>
+            <input
+              type="text"
+              value={customServerUrl}
+              onChange={(e) => setCustomServerUrl(e.target.value)}
+              placeholder="e.g. http://192.168.1.50:3000 or https://x19-pulse.vercel.app"
+              className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs text-indigo-300 font-mono placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          {isLocalhostUrl && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 text-xs text-amber-300">
+              <p className="font-semibold mb-0.5">⚠️ Dashboard URL is currently set to localhost ({activeServerUrl})</p>
+              <p className="text-[11px] text-amber-400/90">
+                If running this installer on a <strong>remote server or VM</strong>, replace <code className="bg-amber-950/60 px-1 py-0.5 rounded text-amber-200">localhost</code> in the box above with your Dashboard host&apos;s public IP address (e.g. <code className="bg-amber-950/60 px-1 py-0.5 rounded text-amber-200">http://192.168.1.50:3000</code>).
+              </p>
+            </div>
+          )}
 
           <p className="text-xs text-slate-400">
             Run this command on any Linux VM host to automatically install x11vnc, noVNC, and the telemetry agent:

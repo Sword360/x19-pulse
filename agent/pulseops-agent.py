@@ -14,20 +14,43 @@ import urllib.request
 import urllib.parse
 import ssl
 
-CONFIG_PATH = "/etc/pulseops/agent.json"
+CONFIG_PATHS = [
+    "/etc/pulseops/agent.json",
+    os.path.expanduser("~/.config/pulseops/agent.json"),
+    "/tmp/pulseops/agent.json"
+]
 DEFAULT_INTERVAL = 3
 
 def read_config():
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {
-        "server_url": os.getenv("PULSEOPS_SERVER", "http://localhost:3000"),
-        "agent_token": os.getenv("PULSEOPS_TOKEN", "default-secret-token")
+    config = {
+        "server_url": "http://localhost:3000",
+        "agent_token": "default-secret-token"
     }
+
+    for path in CONFIG_PATHS:
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    file_conf = json.load(f)
+                    if file_conf.get("server_url"):
+                        config["server_url"] = file_conf["server_url"]
+                    if file_conf.get("agent_token"):
+                        config["agent_token"] = file_conf["agent_token"]
+                    break
+            except Exception:
+                pass
+
+    env_server = os.getenv("PULSEOPS_SERVER")
+    env_token = os.getenv("PULSEOPS_TOKEN")
+    if env_server:
+        config["server_url"] = env_server
+    if env_token:
+        config["agent_token"] = env_token
+
+    if not config["server_url"].startswith(("http://", "https://")):
+        config["server_url"] = "http://" + config["server_url"]
+
+    return config
 
 def get_hostname():
     return socket.gethostname()
