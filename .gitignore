@@ -24,6 +24,10 @@ yarn-error.log*
 logs/
 *.log
 
+# Python cache
+__pycache__/
+*.pyc
+
 # System & IDE files
 .DS_Store
 .vscode/

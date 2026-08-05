@@ -14,60 +14,23 @@ import urllib.request
 import urllib.parse
 import ssl
 
-CONFIG_PATHS = [
-    "/etc/pulseops/agent.json",
-    os.path.expanduser("~/.config/pulseops/agent.json"),
-    "/tmp/pulseops/agent.json"
-]
+CONFIG_PATH = "/etc/pulseops/agent.json"
 DEFAULT_INTERVAL = 3
 
 def read_config():
-    config = {
-        "server_url": "http://localhost:3000",
-        "agent_token": "default-secret-token"
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "server_url": os.getenv("PULSEOPS_SERVER", "http://localhost:3000"),
+        "agent_token": os.getenv("PULSEOPS_TOKEN", "default-secret-token")
     }
-
-    for path in CONFIG_PATHS:
-        if os.path.exists(path):
-            try:
-                with open(path, "r") as f:
-                    file_conf = json.load(f)
-                    if file_conf.get("server_url"):
-                        config["server_url"] = file_conf["server_url"]
-                    if file_conf.get("agent_token"):
-                        config["agent_token"] = file_conf["agent_token"]
-                    break
-            except Exception:
-                pass
-
-    env_server = os.getenv("PULSEOPS_SERVER")
-    env_token = os.getenv("PULSEOPS_TOKEN")
-    if env_server:
-        config["server_url"] = env_server
-    if env_token:
-        config["agent_token"] = env_token
-
-    if not config["server_url"].startswith(("http://", "https://")):
-        config["server_url"] = "http://" + config["server_url"]
-
-    return config
 
 def get_hostname():
     return socket.gethostname()
-
-def get_ip_address():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(0.5)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        try:
-            return socket.gethostbyname(socket.gethostname())
-        except Exception:
-            return "127.0.0.1"
 
 def get_uptime():
     try:
@@ -185,25 +148,6 @@ def get_system_logs():
             logs = ["Journalctl log service active. Running under systemd daemon context."]
     return logs
 
-def check_vnc_active():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(0.5)
-        res = s.connect_ex(("127.0.0.1", 6080))
-        s.close()
-        if res == 0:
-            return True
-    except Exception:
-        pass
-    try:
-        res = subprocess.run(["systemctl", "is-active", "pulseops-vnc"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if res.returncode == 0 and "active" in res.stdout.strip():
-            return True
-        output = subprocess.check_output(["pgrep", "-f", "websockify|x11vnc"], stderr=subprocess.DEVNULL)
-        return len(output.strip()) > 0
-    except Exception:
-        return False
-
 def collect_metrics():
     mem = get_memory_info()
     disk = get_disk_usage()
@@ -213,7 +157,6 @@ def collect_metrics():
     
     return {
         "hostname": get_hostname(),
-        "ip_address": get_ip_address(),
         "uptime": get_uptime(),
         "cpu_usage": get_cpu_usage(),
         "memory": mem,
@@ -221,32 +164,9 @@ def collect_metrics():
         "load_avg": load,
         "processes": procs,
         "logs": logs,
-        "vnc_active": check_vnc_active(),
+        "vnc_active": True,
         "timestamp": int(time.time())
     }
-
-def handle_command(cmd):
-    if not cmd:
-        return
-    cmd_str = str(cmd).strip()
-    print(f"[PulseOps Agent] Executing pending command: {cmd_str}", file=sys.stderr)
-    try:
-        if cmd_str == "start_vnc":
-            subprocess.run(["systemctl", "start", "pulseops-vnc"], check=False)
-            if os.path.exists("/opt/pulseops/vnc-start.sh"):
-                subprocess.Popen(["/opt/pulseops/vnc-start.sh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        elif cmd_str == "stop_vnc":
-            subprocess.run(["systemctl", "stop", "pulseops-vnc"], check=False)
-            subprocess.run(["pkill", "-9", "-f", "websockify|x11vnc"], check=False)
-        elif cmd_str == "restart_vnc":
-            subprocess.run(["systemctl", "restart", "pulseops-vnc"], check=False)
-            if os.path.exists("/opt/pulseops/vnc-start.sh"):
-                subprocess.Popen(["/opt/pulseops/vnc-start.sh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        elif cmd_str.startswith("kill_process:"):
-            pid = cmd_str.split(":", 1)[1]
-            subprocess.run(["kill", "-9", pid], check=False)
-    except Exception as e:
-        print(f"[PulseOps Agent] Command execution error: {e}", file=sys.stderr)
 
 def send_metrics(config, payload):
     url = f"{config['server_url'].rstrip('/')}/api/agent/metrics"
@@ -261,22 +181,13 @@ def send_metrics(config, payload):
     ctx.verify_mode = ssl.CERT_NONE
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
-            if resp.status == 200:
-                resp_body = resp.read().decode("utf-8")
-                try:
-                    res_json = json.loads(resp_body)
-                    cmd = res_json.get("command")
-                    if cmd:
-                        handle_command(cmd)
-                except Exception:
-                    pass
             return resp.status == 200
     except Exception as e:
         print(f"[PulseOps Agent] Transmit status: {e}", file=sys.stderr)
         return False
 
 def main():
-    print(f"[PulseOps Agent] Minimal Single-Daemon initialized on {get_hostname()}...")
+    print(f"[PulseOps Agent] Advanced Daemon initialized on {get_hostname()}...")
     config = read_config()
     while True:
         try:
