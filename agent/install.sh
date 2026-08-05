@@ -83,7 +83,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/pulseops-agent.py" ]; then
   cp "$SCRIPT_DIR/pulseops-agent.py" /tmp/pulseops-agent.py
 else
-  curl -fsSL "https://raw.githubusercontent.com/Sword360/x19-pulse/test/vnc-architecture/agent/pulseops-agent.py" -o /tmp/pulseops-agent.py || true
+  curl -fsSL "https://cdn.jsdelivr.net/gh/Sword360/x19-pulse@main/agent/pulseops-agent.py" -o /tmp/pulseops-agent.py || curl -fsSL "https://raw.githubusercontent.com/Sword360/x19-pulse/main/agent/pulseops-agent.py" -o /tmp/pulseops-agent.py || true
 fi
 
 if [ -w /opt/pulseops ] 2>/dev/null; then
