@@ -173,6 +173,15 @@ def get_system_logs():
 
 def check_vnc_active():
     try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.5)
+        res = s.connect_ex(("127.0.0.1", 6080))
+        s.close()
+        if res == 0:
+            return True
+    except Exception:
+        pass
+    try:
         res = subprocess.run(["systemctl", "is-active", "pulseops-vnc"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if res.returncode == 0 and "active" in res.stdout.strip():
             return True
@@ -209,11 +218,15 @@ def handle_command(cmd):
     try:
         if cmd_str == "start_vnc":
             subprocess.run(["systemctl", "start", "pulseops-vnc"], check=False)
+            if os.path.exists("/opt/pulseops/vnc-start.sh"):
+                subprocess.Popen(["/opt/pulseops/vnc-start.sh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif cmd_str == "stop_vnc":
             subprocess.run(["systemctl", "stop", "pulseops-vnc"], check=False)
             subprocess.run(["pkill", "-9", "-f", "websockify|x11vnc"], check=False)
         elif cmd_str == "restart_vnc":
             subprocess.run(["systemctl", "restart", "pulseops-vnc"], check=False)
+            if os.path.exists("/opt/pulseops/vnc-start.sh"):
+                subprocess.Popen(["/opt/pulseops/vnc-start.sh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif cmd_str.startswith("kill_process:"):
             pid = cmd_str.split(":", 1)[1]
             subprocess.run(["kill", "-9", pid], check=False)

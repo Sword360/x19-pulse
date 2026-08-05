@@ -30,7 +30,8 @@ import {
   Maximize2,
   Minimize2,
   Copy,
-  CheckCircle
+  CheckCircle,
+  ExternalLink
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { UserManagementModal } from "./components/UserManagementModal";
@@ -1008,6 +1009,18 @@ export default function Dashboard() {
 
                         {/* Toolbar Quick Action Controls */}
                         <div className="flex items-center space-x-2">
+                          {/* Launch VNC in New Window Button (Bypasses HTTPS Mixed Content Limits) */}
+                          <a
+                            href={`http://${effectiveVncHost}:6080/vnc.html?host=${effectiveVncHost}&port=6080&autoconnect=true&resize=${vncScaleMode}${vncPassword ? `&password=${encodeURIComponent(vncPassword)}` : ''}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-semibold transition flex items-center space-x-1.5 shadow-md shadow-emerald-600/20"
+                            title="Open VNC session in a new browser tab"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>Launch VNC Window</span>
+                          </a>
+
                           {/* Scale Mode Toggle */}
                           <button
                             onClick={() => setVncScaleMode((prev) => (prev === "scale" ? "off" : "scale"))}
@@ -1054,12 +1067,31 @@ export default function Dashboard() {
                       {/* VNC Stream Canvas area */}
                       <div className="flex-1 w-full bg-slate-950 flex items-center justify-center relative min-h-[460px]">
                         {activeServerData.vnc_active === true ? (
-                          <iframe
-                            id="vncFrame"
-                            src={`http://${effectiveVncHost}:6080/vnc.html?host=${effectiveVncHost}&port=6080&autoconnect=true&resize=${vncScaleMode}${vncPassword ? `&password=${encodeURIComponent(vncPassword)}` : ''}`}
-                            className="w-full h-full border-0 bg-slate-950 min-h-[460px]"
-                            title="TigerVNC Desktop Display Stream"
-                          />
+                          <div className="w-full h-full relative min-h-[460px] flex flex-col">
+                            {typeof window !== 'undefined' && window.location.protocol === 'https:' && (
+                              <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2 text-xs text-amber-300 flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                                  <span>Browsers block HTTP inside HTTPS. If iframe below is blank, launch VNC directly:</span>
+                                </span>
+                                <a
+                                  href={`http://${effectiveVncHost}:6080/vnc.html?host=${effectiveVncHost}&port=6080&autoconnect=true&resize=${vncScaleMode}${vncPassword ? `&password=${encodeURIComponent(vncPassword)}` : ''}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded text-[11px] font-bold transition shrink-0 flex items-center gap-1"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  Open VNC Display
+                                </a>
+                              </div>
+                            )}
+                            <iframe
+                              id="vncFrame"
+                              src={`http://${effectiveVncHost}:6080/vnc.html?host=${effectiveVncHost}&port=6080&autoconnect=true&resize=${vncScaleMode}${vncPassword ? `&password=${encodeURIComponent(vncPassword)}` : ''}`}
+                              className="w-full flex-1 border-0 bg-slate-950 min-h-[460px]"
+                              title="TigerVNC Desktop Display Stream"
+                            />
+                          </div>
                         ) : (
                           <div className="text-center p-8 max-w-md space-y-4">
                             <div className="w-16 h-16 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center mx-auto text-slate-600">

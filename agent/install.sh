@@ -108,19 +108,19 @@ print_progress 95 "Starting background x11vnc daemon & noVNC service..."
 # 5a. Create x11vnc launcher script with dynamic password detection
 cat <<'EOF' | sudo tee /opt/pulseops/x11vnc-start.sh > /dev/null
 #!/bin/bash
-export DISPLAY=:0
-XAUTH="/run/user/1000/gdm/Xauthority"
+export DISPLAY=${DISPLAY:-:0}
 PASS_FILE="/etc/x11vnc.pass"
 
-# Wait for Xauthority file or fallback
-while [ ! -f "$XAUTH" ] && [ ! -f "$HOME/.Xauthority" ]; do
-    sleep 2
+XAUTH=""
+for f in /run/user/1000/gdm/Xauthority /var/run/gdm3/* /var/run/gdm/* /var/run/lightdm/* /run/sddm/* $HOME/.Xauthority /root/.Xauthority /tmp/xauth*; do
+    if [ -f "$f" ] && [ -s "$f" ]; then
+        XAUTH="$f"
+        break
+    fi
 done
 
-if [ -f "$XAUTH" ]; then
+if [ -n "$XAUTH" ]; then
     AUTH_FLAGS="-auth $XAUTH"
-elif [ -f "$HOME/.Xauthority" ]; then
-    AUTH_FLAGS="-auth $HOME/.Xauthority"
 else
     AUTH_FLAGS="-auth guess"
 fi
@@ -131,7 +131,9 @@ else
     AUTH_MODE="-nopw"
 fi
 
-exec /usr/bin/x11vnc -display :0 $AUTH_FLAGS -rfbport 5900 -forever -shared -dpms -noxrecord -wait 10 $AUTH_MODE
+pkill -9 -x x11vnc 2>/dev/null || true
+
+exec /usr/bin/x11vnc -display :0 $AUTH_FLAGS -rfbport 5900 -forever -shared -dpms -noxrecord -wait 5 $AUTH_MODE
 EOF
 
 sudo chmod +x /opt/pulseops/x11vnc-start.sh 2>/dev/null || chmod +x /opt/pulseops/x11vnc-start.sh 2>/dev/null || true
